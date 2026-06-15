@@ -337,6 +337,26 @@
     #printArea{display:block !important;}
     .p-photos img{break-inside:avoid;}
   }
+
+  /* PIN lock */
+  html.locked{overflow:hidden;}
+  .lockscreen{position:fixed;inset:0;z-index:200;background:var(--bg);display:none;align-items:center;justify-content:center;padding:24px;padding-top:calc(env(safe-area-inset-top) + 24px);}
+  .lockscreen.show{display:flex;}
+  .lock-card{width:100%;max-width:300px;text-align:center;}
+  .lock-logo svg{width:48px;height:48px;}
+  .lock-title{font-size:18px;font-weight:700;margin:14px 0 2px;color:var(--ink);}
+  .lock-dots{display:flex;gap:15px;justify-content:center;margin:20px 0 4px;}
+  .lock-dots span{width:14px;height:14px;border-radius:50%;border:2px solid var(--muted);transition:.15s;}
+  .lock-dots span.on{background:var(--accent);border-color:var(--accent);}
+  .lock-msg{min-height:18px;color:var(--danger);font-size:13px;font-weight:600;margin:6px 0 12px;}
+  .keypad{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;max-width:264px;margin:0 auto;}
+  .keypad button{height:66px;width:66px;justify-self:center;border-radius:50%;border:1px solid var(--line);background:var(--surface);color:var(--ink);font-size:24px;font-weight:600;font-family:inherit;cursor:pointer;}
+  .keypad button:active{background:var(--field);}
+  .keypad .kp-blank{visibility:hidden;border:0;background:none;}
+  .keypad .kp-del{border:0;background:none;color:var(--muted);font-size:22px;}
+  .lock-cancel{margin-top:20px;border:0;background:none;color:var(--muted);font-size:14px;font-family:inherit;cursor:pointer;display:none;}
+  @keyframes shk{0%,100%{transform:translateX(0);}20%{transform:translateX(-9px);}40%{transform:translateX(9px);}60%{transform:translateX(-6px);}80%{transform:translateX(6px);}}
+  .lock-card.shake{animation:shk .4s;}
   #photoView .closev{position:fixed;top:calc(env(safe-area-inset-top) + 14px);right:16px;width:44px;height:44px;border-radius:50%;border:0;background:rgba(255,255,255,.18);color:#fff;font-size:22px;cursor:pointer;z-index:60;}
 
   /* iPad / large screens */
@@ -501,11 +521,28 @@
       <label class="switch"><input type="checkbox" id="sw_notify"><span class="track"><span class="knob"></span></span></label>
     </div>
 
+    <div class="set-section">Customer message</div>
+    <div class="set-row">
+      <span class="lbl">Text customer when marked Ready<small>Opens Messages (or Mail) with your note pre-filled when you change an order to Ready for collection</small></span>
+      <label class="switch"><input type="checkbox" id="sw_finishmsg"><span class="track"><span class="knob"></span></span></label>
+    </div>
+    <div class="field" style="margin:2px;">
+      <textarea id="f_finishmsg" placeholder="Message to send the customer…"></textarea>
+      <div style="font-size:11.5px;color:var(--faint);margin-top:6px;line-height:1.5;">Auto-fills these tags: <b>{name}</b> customer name · <b>{item}</b> repair description · <b>{balance}</b> amount owing · <b>{barcode}</b> · <b>{serial}</b></div>
+    </div>
+
     <div class="set-section">Appearance</div>
     <div class="set-row">
       <span class="lbl">Dark mode<small>Easier on the eyes at the bench</small></span>
       <label class="switch"><input type="checkbox" id="sw_dark"><span class="track"><span class="knob"></span></span></label>
     </div>
+
+    <div class="set-section">Privacy</div>
+    <div class="set-row">
+      <span class="lbl">App lock (PIN)<small>Require a 4-digit code to open Docket</small></span>
+      <label class="switch"><input type="checkbox" id="sw_lock"><span class="track"><span class="knob"></span></span></label>
+    </div>
+    <div class="set-row tap" id="m_changepin" style="display:none;"><span class="lbl">Change PIN</span><span class="chev">›</span></div>
 
     <div class="set-section">Your data</div>
     <div class="set-row tap" id="m_backup"><span class="lbl">Back up data<small>Save all order details to a file</small></span><span class="chev">›</span></div>
@@ -524,6 +561,30 @@
   <video id="videoBig" controls playsinline style="display:none;"></video>
 </div>
 
+<div id="lockScreen" class="lockscreen">
+  <div class="lock-card">
+    <div class="lock-logo"><svg viewBox="0 0 48 48" fill="none"><path d="M14 6h20l8 11-18 25L6 17z" stroke="#0E7C66" stroke-width="2.4" stroke-linejoin="round"/><path d="M6 17h36M16 6l-2 11 10 25 10-25-2-11M14 17l10 9 10-9" stroke="#B08D49" stroke-width="1.6" stroke-linejoin="round"/></svg></div>
+    <div class="lock-title" id="lockTitle">Enter your PIN</div>
+    <div class="lock-dots" id="lockDots"><span></span><span></span><span></span><span></span></div>
+    <div class="lock-msg" id="lockMsg"></div>
+    <div class="keypad" id="keypad">
+      <button type="button" data-k="1">1</button>
+      <button type="button" data-k="2">2</button>
+      <button type="button" data-k="3">3</button>
+      <button type="button" data-k="4">4</button>
+      <button type="button" data-k="5">5</button>
+      <button type="button" data-k="6">6</button>
+      <button type="button" data-k="7">7</button>
+      <button type="button" data-k="8">8</button>
+      <button type="button" data-k="9">9</button>
+      <button type="button" class="kp-blank" data-k=""></button>
+      <button type="button" data-k="0">0</button>
+      <button type="button" class="kp-del" data-k="del">⌫</button>
+    </div>
+    <button type="button" class="lock-cancel" id="lockCancel">Cancel</button>
+  </div>
+</div>
+
 <div id="printArea"></div>
 
 <div class="toast" id="toast"></div>
@@ -533,6 +594,7 @@
 
 /* apply saved theme before paint to avoid a flash */
 (function(){ try{ var raw=localStorage.getItem("docket_settings_v1"); var t=raw?JSON.parse(raw).theme:null; if(t!=="dark"&&t!=="light"){ t=(window.matchMedia&&matchMedia("(prefers-color-scheme: dark)").matches)?"dark":"light"; } document.documentElement.setAttribute("data-theme",t); }catch(e){} })();
+(function(){ try{ var raw=localStorage.getItem("docket_settings_v1"); if(raw){ var s=JSON.parse(raw); if(s.lockOn && s.pinHash){ document.documentElement.classList.add("locked"); var ls=document.getElementById("lockScreen"); if(ls) ls.classList.add("show"); } } }catch(e){} })();
 
 /* ---------- Config ---------- */
 var CURRENCY = "$";
@@ -609,7 +671,7 @@ function processImage(file, maxDim, quality){
 var Settings = (function(){
   var KEY="docket_settings_v1";
   var hasClaude=(typeof window!=="undefined" && window.storage && typeof window.storage.get==="function");
-  var defaults={autoRemind:true, remindTime:"09:00", notifyOnOpen:false, theme:null};
+  var defaults={autoRemind:true, remindTime:"09:00", notifyOnOpen:false, theme:null, lockOn:false, pinHash:null, pinSalt:null, finishMsgOn:false, finishMsg:"Hi {name}, your repair ({item}) is ready to collect. Balance due: {balance}. Thank you!"};
   var cache=Object.assign({},defaults);
   async function load(){
     try{
@@ -760,7 +822,14 @@ listEl.addEventListener("click", function(e){
   var act=btn.getAttribute("data-act");
   var id=btn.getAttribute("data-uid");
   var o=orders.find(function(x){return x.uid===id;}); if(!o) return;
-  if(act==="status"){ o.status=btn.getAttribute("data-status"); o.updated=Date.now(); persist(); }
+  if(act==="status"){
+    var target=btn.getAttribute("data-status");
+    if(o.status===target) return;
+    if(!confirm("Change this order to “"+(STATUS_LABEL[target]||target)+"”?")) return;
+    o.status=target; o.updated=Date.now();
+    render(); Store.save(orders);
+    if(target==="ready") maybeMessageCustomer(o);
+  }
   else if(act==="edit"){ openForm(o); }
   else if(act==="remind"){ remind(o); }
   else if(act==="print"){ printOrder(o); }
@@ -911,19 +980,22 @@ document.getElementById("videoInput").addEventListener("change", async function(
   e.target.value="";
   if(!files.length) return;
   if(!Photos.available()){ toast("Video needs the hosted app — not available in this preview"); return; }
+  var savedAny=false, failed=false;
   for(var i=0;i<files.length;i++){
     var f=files[i];
-    toast("Saving video…");
+    toast("Saving clip…");
     try{
       var id=uid();
       if(await Photos.put(id, f)){
+        savedAny=true;
         formVideos.push(id);
         try{ var poster=await videoPoster(f); if(poster) await Photos.put(id+"__p", poster); }catch(e){}
-      }else{ toast("Couldn’t save that video (storage full?)"); }
-    }catch(err){ toast("Couldn’t save that video"); }
+      }else{ failed=true; }
+    }catch(err){ failed=true; }
   }
   renderFormVideos();
-  toast("Video saved");
+  if(savedAny) toast("Clip saved");
+  else if(failed) toast("Clip too large for the browser’s storage — try a shorter one (a few seconds).");
 });
 
 document.getElementById("saveBtn").addEventListener("click", function(){
@@ -1065,16 +1137,37 @@ async function getOCRWorker(){
   try{ await ocrWorker.setParameters({tessedit_char_whitelist:"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-/ ", tessedit_pageseg_mode:"7"}); }catch(e){}
   return ocrWorker;
 }
+function binarize(canvas, ctx){
+  try{
+    var w=canvas.width, h=canvas.height;
+    var img=ctx.getImageData(0,0,w,h), p=img.data, n=w*h;
+    var gray=new Uint8Array(n), hist=new Array(256), i;
+    for(i=0;i<256;i++) hist[i]=0;
+    for(i=0;i<n;i++){ var y=(p[i*4]*0.299+p[i*4+1]*0.587+p[i*4+2]*0.114)|0; gray[i]=y; hist[y]++; }
+    var total=n, sum=0; for(i=0;i<256;i++) sum+=i*hist[i];
+    var sumB=0, wB=0, maxVar=-1, thr=128;
+    for(i=0;i<256;i++){ wB+=hist[i]; if(wB===0) continue; var wF=total-wB; if(wF===0) break; sumB+=i*hist[i]; var mB=sumB/wB, mF=(sum-sumB)/wF, v=wB*wF*(mB-mF)*(mB-mF); if(v>maxVar){ maxVar=v; thr=i; } }
+    for(i=0;i<n;i++){ var val=gray[i]>thr?255:0; p[i*4]=p[i*4+1]=p[i*4+2]=val; p[i*4+3]=255; }
+    ctx.putImageData(img,0,0);
+  }catch(e){}
+}
 function cropFrame(){
-  var vw=scanVideo.videoWidth, vh=scanVideo.videoHeight;
-  var cw=Math.round(vw*0.84), ch=Math.round(vh*0.24);
-  var cx=Math.round((vw-cw)/2), cy=Math.round((vh-ch)/2);
-  var scale=2;
+  var sw=scanVideo.videoWidth, sh=scanVideo.videoHeight;
+  var rect=scanVideo.getBoundingClientRect();
+  var dispW=rect.width||sw, dispH=rect.height||sh;
+  var scale=Math.max(dispW/sw, dispH/sh) || 1;
+  var offX=(dispW - sw*scale)/2, offY=(dispH - sh*scale)/2;
+  var rx=dispW*0.08, ry=dispH*0.38, rw=dispW*0.84, rh=dispH*0.24;
+  var sx=(rx-offX)/scale, sy=(ry-offY)/scale, scw=rw/scale, sch=rh/scale;
+  sx=Math.max(0,Math.min(sw-1,sx)); sy=Math.max(0,Math.min(sh-1,sy));
+  scw=Math.max(1,Math.min(sw-sx,scw)); sch=Math.max(1,Math.min(sh-sy,sch));
+  var up=3;
   var canvas=document.createElement("canvas");
-  canvas.width=cw*scale; canvas.height=ch*scale;
+  canvas.width=Math.round(scw*up); canvas.height=Math.round(sch*up);
   var ctx=canvas.getContext("2d");
-  try{ ctx.filter="grayscale(1) contrast(1.35)"; }catch(e){}
-  ctx.drawImage(scanVideo, cx, cy, cw, ch, 0, 0, cw*scale, ch*scale);
+  ctx.imageSmoothingEnabled=true; ctx.imageSmoothingQuality="high";
+  ctx.drawImage(scanVideo, sx, sy, scw, sch, 0, 0, canvas.width, canvas.height);
+  binarize(canvas, ctx);
   return canvas;
 }
 function cleanSerial(t){
@@ -1240,12 +1333,10 @@ function closeViewer(){ document.getElementById("photoView").classList.remove("s
 document.getElementById("photoClose").addEventListener("click", closeViewer);
 
 /* ---------- Print ---------- */
-var printUrls=[];
-function cleanupPrint(){ printUrls.forEach(function(u){ try{URL.revokeObjectURL(u);}catch(e){} }); printUrls=[]; var a=document.getElementById("printArea"); if(a) a.innerHTML=""; }
-window.addEventListener("afterprint", cleanupPrint);
 function printRow(label,val){ return '<tr><th>'+esc(label)+'</th><td>'+esc(val)+'</td></tr>'; }
+function blobToDataURL(blob){ return new Promise(function(res){ try{ var r=new FileReader(); r.onload=function(){res(r.result);}; r.onerror=function(){res(null);}; r.readAsDataURL(blob); }catch(e){ res(null); } }); }
+var PRINT_CSS="*{box-sizing:border-box;}body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#111;margin:22px;}h1{font-size:20px;letter-spacing:.12em;text-transform:uppercase;margin:0;}.p-head{display:flex;justify-content:space-between;align-items:flex-end;border-bottom:2px solid #111;padding-bottom:8px;margin-bottom:14px;}.p-id{font-family:monospace;font-size:13px;color:#333;}table{width:100%;border-collapse:collapse;font-size:13px;}th{text-align:left;width:32%;vertical-align:top;color:#555;font-weight:600;padding:7px 8px;border-bottom:1px solid #ddd;}td{padding:7px 8px;border-bottom:1px solid #ddd;vertical-align:top;white-space:pre-wrap;}.p-photos{display:flex;flex-wrap:wrap;gap:10px;margin-top:16px;}.p-photos img{width:48%;max-height:360px;object-fit:contain;border:1px solid #ccc;}.p-foot{margin-top:18px;font-size:11px;color:#888;}";
 async function doPrint(d){
-  var area=document.getElementById("printArea");
   var bal=num(d.cost)-num(d.paid);
   var rows="";
   if((d.customer||"").trim()) rows+=printRow("Customer", d.customer);
@@ -1261,19 +1352,29 @@ async function doPrint(d){
   if((d.notes||"").trim()) rows+=printRow("Notes", d.notes);
   if(d.videos && d.videos.length) rows+=printRow("Videos on file", d.videos.length+" (viewable in the app)");
   var photoIds=d.photos||[];
-  printUrls=[];
-  for(var i=0;i<photoIds.length;i++){ try{ var b=await Photos.get(photoIds[i]); if(b) printUrls.push(URL.createObjectURL(b)); }catch(e){} }
-  var photosHtml = printUrls.length ? '<div class="p-photos">'+printUrls.map(function(u){return '<img src="'+u+'">';}).join("")+'</div>' : '';
-  area.innerHTML =
-    '<div class="p-doc">'+
-      '<div class="p-head"><h1>Repair Docket</h1><span class="p-id">'+esc(d.barcode||"")+'</span></div>'+
-      '<table class="p-info">'+rows+'</table>'+
-      photosHtml+
-      '<div class="p-foot">Printed '+fmtDate(todayISO())+'</div>'+
-    '</div>';
-  var imgs=area.querySelectorAll("img");
-  await Promise.all(Array.prototype.map.call(imgs, function(im){ return (im.complete && im.naturalWidth) ? Promise.resolve() : new Promise(function(res){ im.onload=res; im.onerror=res; }); }));
-  try{ window.print(); }catch(e){ toast("Printing isn’t available in this view — use the hosted app"); }
+  var imgsHtml="";
+  for(var i=0;i<photoIds.length;i++){ try{ var b=await Photos.get(photoIds[i]); if(b){ var u=await blobToDataURL(b); if(u) imgsHtml+='<img src="'+u+'">'; } }catch(e){} }
+  var photosBlock = imgsHtml ? '<div class="p-photos">'+imgsHtml+'</div>' : '';
+  var docHtml='<!DOCTYPE html><html><head><meta charset="utf-8"><title>Repair Docket</title><style>'+PRINT_CSS+'</style></head><body>'+
+    '<div class="p-head"><h1>Repair Docket</h1><span class="p-id">'+esc(d.barcode||"")+'</span></div>'+
+    '<table>'+rows+'</table>'+photosBlock+
+    '<div class="p-foot">Printed '+fmtDate(todayISO())+'</div>'+
+    '</body></html>';
+  var iframe=document.createElement("iframe");
+  iframe.setAttribute("aria-hidden","true");
+  iframe.style.cssText="position:fixed;right:0;bottom:0;width:1px;height:1px;border:0;opacity:0;";
+  document.body.appendChild(iframe);
+  function removeIframe(){ try{ if(iframe.parentNode) iframe.parentNode.removeChild(iframe); }catch(e){} }
+  try{
+    var win=iframe.contentWindow, idoc=win.document;
+    idoc.open(); idoc.write(docHtml); idoc.close();
+    var imgs=idoc.images;
+    await Promise.all(Array.prototype.map.call(imgs, function(im){ return (im.complete && im.naturalWidth) ? Promise.resolve() : new Promise(function(r){ im.onload=r; im.onerror=r; setTimeout(r,3000); }); }));
+    await new Promise(function(r){ setTimeout(r, 250); });
+    try{ win.onafterprint=removeIframe; }catch(e){}
+    win.focus(); win.print();
+  }catch(e){ toast("Couldn’t open the printer — try again"); removeIframe(); }
+  setTimeout(removeIframe, 60000);
 }
 function printFromForm(){
   doPrint({
@@ -1295,6 +1396,60 @@ function printFromForm(){
 function printOrder(o){ doPrint(o); }
 document.getElementById("printBtn").addEventListener("click", printFromForm);
 
+/* ---------- PIN lock ---------- */
+async function hashPin(pin, salt){
+  var str=(salt||"")+":"+pin;
+  try{
+    if(window.crypto && crypto.subtle){
+      var buf=await crypto.subtle.digest("SHA-256", new TextEncoder().encode(str));
+      return "s"+Array.from(new Uint8Array(buf)).map(function(b){return b.toString(16).padStart(2,"0");}).join("");
+    }
+  }catch(e){}
+  var h=5381; for(var i=0;i<str.length;i++){ h=(((h<<5)+h)+str.charCodeAt(i))>>>0; }
+  return "w"+h.toString(16);
+}
+var lockEntry="", lockMode="enter", lockTmpPin="";
+function updateDots(){ var d=document.getElementById("lockDots").children; for(var i=0;i<d.length;i++){ d[i].className = i<lockEntry.length ? "on":""; } }
+function showLock(mode){
+  lockMode=mode||"enter"; lockEntry=""; lockTmpPin="";
+  document.getElementById("lockTitle").textContent = lockMode==="set1"?"Create a 4-digit PIN":(lockMode==="set2"?"Re-enter your PIN":"Enter your PIN");
+  document.getElementById("lockMsg").textContent="";
+  document.getElementById("lockCancel").style.display=(lockMode==="set1"||lockMode==="set2")?"block":"none";
+  updateDots();
+  document.documentElement.classList.add("locked");
+  document.getElementById("lockScreen").classList.add("show");
+}
+function hideLock(){ document.getElementById("lockScreen").classList.remove("show"); document.documentElement.classList.remove("locked"); lockEntry=""; lockTmpPin=""; }
+function lockShake(msg){ var c=document.querySelector(".lock-card"); document.getElementById("lockMsg").textContent=msg||""; if(c){ c.classList.remove("shake"); void c.offsetWidth; c.classList.add("shake"); } lockEntry=""; updateDots(); }
+async function lockDigit(d){
+  if(lockEntry.length>=4) return;
+  lockEntry+=d; updateDots();
+  if(lockEntry.length<4) return;
+  if(lockMode==="enter"){
+    var h=await hashPin(lockEntry, Settings.get().pinSalt||"");
+    if(h===Settings.get().pinHash){ hideLock(); } else { lockShake("Wrong PIN, try again"); }
+  }else if(lockMode==="set1"){
+    lockTmpPin=lockEntry; lockEntry=""; lockMode="set2";
+    document.getElementById("lockTitle").textContent="Re-enter your PIN";
+    document.getElementById("lockMsg").textContent=""; updateDots();
+  }else if(lockMode==="set2"){
+    if(lockEntry===lockTmpPin){
+      var salt=uid()+uid();
+      var hh=await hashPin(lockTmpPin, salt);
+      Settings.set("pinSalt",salt); Settings.set("pinHash",hh); Settings.set("lockOn",true);
+      await Settings.save(); refreshSettingsUI(); hideLock(); toast("PIN lock turned on");
+    }else{
+      lockMode="set1"; lockTmpPin="";
+      document.getElementById("lockTitle").textContent="Create a 4-digit PIN";
+      lockShake("PINs didn’t match — start again");
+    }
+  }
+}
+function lockDel(){ lockEntry=lockEntry.slice(0,-1); updateDots(); }
+document.getElementById("keypad").addEventListener("click", function(e){ var b=e.target.closest("button"); if(!b) return; var k=b.getAttribute("data-k"); if(k==="del") lockDel(); else if(k) lockDigit(k); });
+document.getElementById("lockCancel").addEventListener("click", function(){ hideLock(); refreshSettingsUI(); });
+document.addEventListener("keydown", function(e){ if(!document.getElementById("lockScreen").classList.contains("show")) return; if(/^[0-9]$/.test(e.key)) lockDigit(e.key); else if(e.key==="Backspace") lockDel(); });
+
 /* ---------- Menu / Settings ---------- */
 document.getElementById("menuBtn").addEventListener("click", function(){
   var note="Saving to this device.";
@@ -1310,6 +1465,10 @@ function refreshSettingsUI(){
   var n=document.getElementById("sw_notify"); if(n) n.checked=(!!s.notifyOnOpen && ("Notification" in window) && Notification.permission==="granted");
   var d=document.getElementById("sw_dark"); if(d) d.checked=((document.documentElement.getAttribute("data-theme")||currentSystemTheme())==="dark");
   var t=document.getElementById("remindTime"); if(t) t.value=s.remindTime||"09:00";
+  var l=document.getElementById("sw_lock"); if(l) l.checked=!!s.lockOn;
+  var cp=document.getElementById("m_changepin"); if(cp) cp.style.display=s.lockOn?"flex":"none";
+  var fm=document.getElementById("sw_finishmsg"); if(fm) fm.checked=!!s.finishMsgOn;
+  var ft=document.getElementById("f_finishmsg"); if(ft) ft.value=s.finishMsg||"";
 }
 document.getElementById("sw_auto").addEventListener("change", async function(e){ Settings.set("autoRemind", e.target.checked); await Settings.save(); toast(e.target.checked?"Auto reminders on":"Auto reminders off"); });
 document.getElementById("remindTime").addEventListener("change", async function(e){ Settings.set("remindTime", e.target.value||"09:00"); await Settings.save(); toast("Reminder time set to "+(e.target.value||"09:00")); });
@@ -1322,21 +1481,74 @@ document.getElementById("sw_notify").addEventListener("change", async function(e
   }else{ Settings.set("notifyOnOpen", false); await Settings.save(); }
 });
 document.getElementById("sw_dark").addEventListener("change", function(e){ var t=e.target.checked?"dark":"light"; Settings.set("theme",t); Settings.save(); applyTheme(t); });
+document.getElementById("sw_lock").addEventListener("change", function(e){
+  if(e.target.checked){
+    if(Settings.get().lockOn && Settings.get().pinHash) return;
+    document.getElementById("menuOverlay").classList.remove("show");
+    showLock("set1");
+  }else{
+    if(!confirm("Turn off the PIN lock? Docket will open without a code.")){ e.target.checked=true; return; }
+    Settings.set("lockOn",false); Settings.set("pinHash",null); Settings.set("pinSalt",null);
+    Settings.save(); refreshSettingsUI(); toast("PIN lock turned off");
+  }
+});
+document.getElementById("m_changepin").addEventListener("click", function(){
+  document.getElementById("menuOverlay").classList.remove("show");
+  showLock("set1");
+});
 document.getElementById("m_remindall").addEventListener("click", function(){ remindAll(); closeAll(); });
+
+document.getElementById("sw_finishmsg").addEventListener("change", async function(e){ Settings.set("finishMsgOn", e.target.checked); await Settings.save(); toast(e.target.checked?"Customer message on":"Customer message off"); });
+document.getElementById("f_finishmsg").addEventListener("change", async function(e){ Settings.set("finishMsg", e.target.value); await Settings.save(); });
+function fillTemplate(t,o){
+  var bal=balance(o);
+  return String(t)
+    .replace(/\{name\}/gi, o.customer||"")
+    .replace(/\{item\}/gi, o.description||"")
+    .replace(/\{balance\}/gi, money(bal))
+    .replace(/\{barcode\}/gi, o.barcode||"")
+    .replace(/\{serial\}/gi, o.serial||"");
+}
+function openMessage(contact, msg){
+  contact=(contact||"").trim();
+  var href;
+  if(contact.indexOf("@")>-1){
+    href="mailto:"+encodeURIComponent(contact)+"?subject="+encodeURIComponent("Your repair is ready")+"&body="+encodeURIComponent(msg);
+  }else{
+    var n=contact.replace(/[^0-9+]/g,"");
+    var ua=navigator.userAgent||"";
+    var sep=/iPhone|iPad|iPod|Macintosh/.test(ua)?"&":"?";
+    href="sms:"+n+sep+"body="+encodeURIComponent(msg);
+  }
+  try{ window.location.href=href; }catch(e){ toast("Couldn’t open your messaging app"); }
+}
+function maybeMessageCustomer(o){
+  var s=Settings.get();
+  if(!s.finishMsgOn || !(s.finishMsg||"").trim()) return;
+  if(!(o.contact||"").trim()){ toast("No phone/email on file to message "+(o.customer||"the customer")); return; }
+  openMessage(o.contact, fillTemplate(s.finishMsg, o));
+}
 
 /* ---------- Toast ---------- */
 var toastEl=document.getElementById("toast"), toastT=null;
 function toast(msg){ toastEl.textContent=msg; toastEl.classList.add("show"); clearTimeout(toastT); toastT=setTimeout(function(){toastEl.classList.remove("show");},2200); }
 
 /* ---------- Boot ---------- */
+var lockHiddenAt=0;
 (async function(){
+  try{ if(navigator.storage && navigator.storage.persist) navigator.storage.persist(); }catch(e){}
   await Settings.load();
   orders = await Store.load();
   applyTheme(Settings.get().theme);
   refreshSettingsUI();
   render();
+  if(Settings.get().lockOn && Settings.get().pinHash){ showLock("enter"); }
   setTimeout(function(){ notifyOverdue(false); }, 800);
-  document.addEventListener("visibilitychange", function(){ if(!document.hidden) notifyOverdue(false); });
+  document.addEventListener("visibilitychange", function(){
+    if(document.hidden){ lockHiddenAt=Date.now(); return; }
+    if(Settings.get().lockOn && Settings.get().pinHash && lockHiddenAt && (Date.now()-lockHiddenAt)>60000){ showLock("enter"); }
+    notifyOverdue(false);
+  });
 })();
 </script>
 </body>
