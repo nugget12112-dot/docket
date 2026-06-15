@@ -545,8 +545,9 @@
     <div class="set-row tap" id="m_changepin" style="display:none;"><span class="lbl">Change PIN</span><span class="chev">›</span></div>
 
     <div class="set-section">Your data</div>
-    <div class="set-row tap" id="m_backup"><span class="lbl">Back up data<small>Save all order details to a file</small></span><span class="chev">›</span></div>
-    <div class="set-row tap" id="m_restore"><span class="lbl">Restore from backup<small>Load orders from a file</small></span><span class="chev">›</span></div>
+    <div class="set-row tap" id="m_backup"><span class="lbl">Save all dockets<small>Back up details, photos &amp; videos to one file</small></span><span class="chev">›</span></div>
+    <div class="set-row tap" id="m_backup_lite"><span class="lbl">Save dockets — no videos<small>Smaller file: details &amp; photos only</small></span><span class="chev">›</span></div>
+    <div class="set-row tap" id="m_restore"><span class="lbl">Restore from backup<small>Load all dockets back from a backup file</small></span><span class="chev">›</span></div>
     <div class="set-row tap" id="m_csv"><span class="lbl">Export to spreadsheet (CSV)</span><span class="chev">›</span></div>
 
     <div class="modenote" id="modeNote"></div>
@@ -1264,9 +1265,53 @@ function download(filename, text, mime){
     return true;
   }catch(e){ return false; }
 }
-document.getElementById("m_backup").addEventListener("click", function(){
-  var ok=download("docket-backup-"+todayISO()+".json", JSON.stringify(orders,null,2), "application/json");
-  toast(ok?"Backup downloaded":"Couldn’t create the file here"); closeAll();
+function dataURLToBlob(durl){
+  try{
+    var parts=String(durl).split(","); var meta=parts[0]||""; var b64=parts[1]||"";
+    var m=meta.match(/data:([^;]+)/); var mime=m?m[1]:"application/octet-stream";
+    var bin=atob(b64); var len=bin.length; var arr=new Uint8Array(len);
+    for(var i=0;i<len;i++) arr[i]=bin.charCodeAt(i);
+    return new Blob([arr],{type:mime});
+  }catch(e){ return null; }
+}
+function fmtSize(bytes){ if(bytes<1024) return bytes+" B"; if(bytes<1048576) return (bytes/1024).toFixed(0)+" KB"; return (bytes/1048576).toFixed(1)+" MB"; }
+document.getElementById("m_backup").addEventListener("click", async function(){
+  toast("Preparing backup…");
+  // collect every media id referenced by any order (photos, videos, and video posters)
+  var ids=[];
+  orders.forEach(function(o){
+    (o.photos||[]).forEach(function(id){ ids.push(id); });
+    (o.videos||[]).forEach(function(id){ ids.push(id); ids.push(id+"__p"); });
+  });
+  var seen={}, media={}, gotAny=true;
+  for(var i=0;i<ids.length;i++){
+    var id=ids[i]; if(seen[id]) continue; seen[id]=1;
+    try{ var b=await Photos.get(id); if(b){ var d=await blobToDataURL(b); if(d) media[id]=d; } }catch(e){}
+  }
+  var payload={ app:"docket", version:2, exportedAt:todayISO(), orders:orders, media:media };
+  var text;
+  try{ text=JSON.stringify(payload); }
+  catch(e){ toast("Backup too large to build on this device"); return; }
+  var ok=download("docket-backup-"+todayISO()+".json", text, "application/json");
+  toast(ok?("Backup saved ("+fmtSize(text.length)+")"):"Couldn’t create the file here");
+  closeAll();
+});
+document.getElementById("m_backup_lite").addEventListener("click", async function(){
+  toast("Preparing backup…");
+  var liteOrders=orders.map(function(o){ return Object.assign({}, o, {videos:[]}); });
+  var seen={}, media={}, ids=[];
+  orders.forEach(function(o){ (o.photos||[]).forEach(function(id){ ids.push(id); }); });
+  for(var i=0;i<ids.length;i++){
+    var id=ids[i]; if(seen[id]) continue; seen[id]=1;
+    try{ var b=await Photos.get(id); if(b){ var d=await blobToDataURL(b); if(d) media[id]=d; } }catch(e){}
+  }
+  var payload={ app:"docket", version:2, exportedAt:todayISO(), orders:liteOrders, media:media };
+  var text;
+  try{ text=JSON.stringify(payload); }
+  catch(e){ toast("Backup too large to build on this device"); return; }
+  var ok=download("docket-backup-photos-"+todayISO()+".json", text, "application/json");
+  toast(ok?("Backup saved ("+fmtSize(text.length)+")"):"Couldn’t create the file here");
+  closeAll();
 });
 document.getElementById("m_restore").addEventListener("click", function(){ document.getElementById("restoreFile").click(); });
 document.getElementById("restoreFile").addEventListener("change", function(e){
@@ -1275,10 +1320,25 @@ document.getElementById("restoreFile").addEventListener("change", function(e){
   reader.onload=async function(){
     try{
       var data=JSON.parse(reader.result);
-      if(!Array.isArray(data)) throw new Error("format");
-      if(orders.length && !confirm("Replace your current "+orders.length+" order(s) with "+data.length+" from the backup?")) return;
-      orders=data.map(function(o){ if(!o.uid) o.uid=uid(); return o; });
-      await persist(); toast("Restored "+orders.length+" orders"); closeAll();
+      var incoming, media=null;
+      if(Array.isArray(data)){ incoming=data; }                       // old details-only backup
+      else if(data && Array.isArray(data.orders)){ incoming=data.orders; media=data.media||null; }
+      else throw new Error("format");
+      if(orders.length && !confirm("Replace your current "+orders.length+" order(s) with "+incoming.length+" from the backup?")) return;
+      var mediaCount=media?Object.keys(media).length:0;
+      if(mediaCount && !Photos.available()){ toast("Photos/videos can’t be restored in this view — restoring details only"); }
+      if(mediaCount && Photos.available()){
+        toast("Restoring photos & videos…");
+        var keys=Object.keys(media);
+        for(var k=0;k<keys.length;k++){
+          var blob=dataURLToBlob(media[keys[k]]);
+          if(blob){ try{ await Photos.put(keys[k], blob); }catch(e){} }
+        }
+      }
+      orders=incoming.map(function(o){ if(!o.uid) o.uid=uid(); return o; });
+      await persist();
+      toast("Restored "+orders.length+" docket(s)"+(mediaCount?(" + "+mediaCount+" files"):""));
+      closeAll();
     }catch(err){ toast("That file isn’t a valid backup"); }
   };
   reader.readAsText(file);
