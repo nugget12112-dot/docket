@@ -127,6 +127,9 @@
   .chip.active{background:var(--ink);color:var(--surface);border-color:var(--ink);}
   .chip.active[data-count]::after{color:color-mix(in srgb, var(--surface) 60%, transparent);}
   .chip.over.active{background:var(--danger);border-color:var(--danger);color:#fff;}
+  .chip.archive{border-color:var(--accent-line);color:var(--accent);}
+  .chip.archive.active{background:var(--accent);border-color:var(--accent);color:#fff;}
+  .chip.archive.active[data-count]::after{color:rgba(255,255,255,.7);}
   .sort{
     appearance:none;border:1px solid var(--line);background:var(--surface);color:var(--ink);
     font-family:inherit;font-size:13px;font-weight:600;height:35px;padding:0 30px 0 13px;border-radius:999px;
@@ -190,17 +193,31 @@
   .seg button.on[data-status="open"]{background:var(--open);color:#fff;}
   .seg button.on[data-status="ready"]{background:var(--ready);color:#fff;}
   .seg button.on[data-status="collected"]{background:var(--collected);color:#fff;}
-  .actions{display:flex;gap:8px;margin-top:10px;}
+  .actions{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;}
   .abtn{
     appearance:none;border:1px solid var(--line);background:var(--surface);color:var(--ink);
     font-family:inherit;font-size:13px;font-weight:600;height:40px;border-radius:11px;cursor:pointer;
     display:inline-flex;align-items:center;justify-content:center;gap:6px;
   }
-  .abtn.remind{flex:1;border-color:var(--accent-line);color:var(--accent);background:var(--accent-tint);}
-  .abtn.edit{flex:1;}
-  .abtn.pr{width:46px;}
-  .abtn.del{width:46px;color:var(--danger);}
+  .abtn.view{flex:1 1 76px;border-color:var(--accent-line);color:var(--accent);background:var(--accent-tint);}
+  .abtn.remind{flex:1 1 74px;}
+  .abtn.edit{flex:1 1 52px;}
+  .abtn.pr{flex:0 0 46px;width:46px;}
+  .abtn.del{flex:0 0 46px;width:46px;color:var(--danger);}
   .abtn:active{filter:brightness(.97);}
+  /* read-only preview */
+  .pv-top{display:flex;align-items:center;gap:10px;margin:2px 0;}
+  .pv-over{color:var(--danger);font-weight:700;font-size:12.5px;}
+  .pv-soon{color:var(--accent);font-weight:700;}
+  .pv-sec{margin-top:16px;}
+  .pv-sec-h{font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--faint);margin:0 0 6px;font-weight:700;}
+  .pv-row{display:flex;justify-content:space-between;gap:14px;padding:9px 0;border-bottom:1px solid var(--line);font-size:14px;}
+  .pv-row:first-child{padding-top:0;}
+  .pv-row:last-child{border-bottom:none;}
+  .pv-lbl{color:var(--muted);flex:0 0 auto;}
+  .pv-val{color:var(--ink);text-align:right;font-weight:600;word-break:break-word;}
+  .pv-val a{color:var(--accent);text-decoration:none;}
+  .pv-notes{white-space:pre-wrap;font-size:14px;line-height:1.55;color:var(--ink);background:var(--accent-tint);border:1px solid var(--line);border-radius:12px;padding:11px 13px;}
 
   /* Empty */
   .empty{max-width:680px;margin:0 auto;padding:64px 30px;text-align:center;color:var(--muted);}
@@ -331,11 +348,11 @@
   .p-photos img{width:48%;max-height:360px;object-fit:contain;border:1px solid #ccc;border-radius:4px;}
   .p-foot{margin-top:18px;font-size:11px;color:#888;}
   @media print{
-    html,body{background:#fff !important;}
-    body{padding:0 !important;}
-    body > *{display:none !important;}
+    html,body{background:#fff !important;margin:0 !important;padding:0 !important;height:auto !important;}
+    body > *:not(#printArea){display:none !important;}
     #printArea{display:block !important;}
     .p-photos img{break-inside:avoid;}
+    @page{margin:14mm;}
   }
 
   /* PIN lock */
@@ -397,7 +414,7 @@
         <button class="chip over" data-filter="overdue">Overdue</button>
         <button class="chip" data-filter="open">Open</button>
         <button class="chip" data-filter="ready">Ready</button>
-        <button class="chip" data-filter="collected">Collected</button>
+        <button class="chip archive" data-filter="archive">🗄 Completed</button>
       </div>
       <select class="sort" id="sort" aria-label="Sort">
         <option value="received_desc">Received ↓</option>
@@ -478,6 +495,19 @@
     <div class="form-actions">
       <button class="ghost" data-close>Cancel</button>
       <button class="primary" id="saveBtn">Save order</button>
+    </div>
+  </div>
+</div>
+
+<!-- Preview (read-only) -->
+<div class="overlay" id="previewOverlay">
+  <div class="modal">
+    <div class="grip"></div>
+    <div class="mhead"><h3 id="pv_title">Docket</h3><button class="x" data-close>×</button></div>
+    <div id="previewBody"></div>
+    <div class="form-actions">
+      <button class="ghost" id="pv_print">🖨 Print</button>
+      <button class="primary" id="pv_edit">Edit docket</button>
     </div>
   </div>
 </div>
@@ -718,6 +748,9 @@ var emptyEl=document.getElementById("empty");
 
 function countFilter(f){
   return orders.filter(function(o){
+    var done=o.status==="collected";
+    if(f==="archive") return done;
+    if(done) return false;
     if(f==="all") return true;
     if(f==="overdue") return isOverdue(o);
     return o.status===f;
@@ -726,8 +759,13 @@ function countFilter(f){
 
 function applyFilterSort(){
   var arr = orders.filter(function(o){
-    var pass = (filter==="all") ? true : (filter==="overdue" ? isOverdue(o) : o.status===filter);
-    if(!pass) return false;
+    var done=o.status==="collected";
+    if(filter==="archive"){ if(!done) return false; }
+    else {
+      if(done) return false;
+      var pass = (filter==="all") ? true : (filter==="overdue" ? isOverdue(o) : o.status===filter);
+      if(!pass) return false;
+    }
     if(term){
       var hay = (o.barcode+" "+(o.serial||"")+" "+o.customer+" "+o.contact+" "+o.description+" "+o.notes).toLowerCase();
       if(hay.indexOf(term)===-1) return false;
@@ -788,7 +826,8 @@ function cardHTML(o){
     '</div>'+
     '<div class="seg">'+seg+'</div>'+
     '<div class="actions">'+
-      '<button class="abtn remind" data-act="remind" data-uid="'+o.uid+'">🔔 Remind</button>'+
+      '<button class="abtn view" data-act="view" data-uid="'+o.uid+'">👁 View</button>'+
+      (o.status==="collected" ? '' : '<button class="abtn remind" data-act="remind" data-uid="'+o.uid+'">🔔 Remind</button>')+
       '<button class="abtn edit" data-act="edit" data-uid="'+o.uid+'">Edit</button>'+
       '<button class="abtn pr" data-act="print" data-uid="'+o.uid+'" aria-label="Print">🖨</button>'+
       '<button class="abtn del" data-act="del" data-uid="'+o.uid+'" aria-label="Delete">🗑</button>'+
@@ -811,7 +850,10 @@ function render(){
   var arr=applyFilterSort();
   if(orders.length===0){ emptyEl.style.display="block"; listEl.innerHTML=""; return; }
   emptyEl.style.display="none";
-  if(arr.length===0){ listEl.innerHTML='<div style="grid-column:1/-1;text-align:center;color:var(--muted);padding:30px 10px;font-size:14px;">Nothing matches this filter.</div>'; return; }
+  if(arr.length===0){
+    var emptyMsg = (filter==="archive") ? "No completed dockets yet. Mark an order “Collected” and it moves here." : "Nothing matches this filter.";
+    listEl.innerHTML='<div style="grid-column:1/-1;text-align:center;color:var(--muted);padding:30px 10px;font-size:14px;">'+emptyMsg+'</div>'; return;
+  }
   listEl.innerHTML = arr.map(cardHTML).join("");
 }
 
@@ -830,15 +872,20 @@ listEl.addEventListener("click", function(e){
     o.status=target; o.updated=Date.now();
     render(); Store.save(orders);
     if(target==="ready") maybeMessageCustomer(o);
+    else if(target==="collected") toast("Moved to Completed");
   }
+  else if(act==="view"){ openPreview(o); }
   else if(act==="edit"){ openForm(o); }
   else if(act==="remind"){ remind(o); }
   else if(act==="print"){ printOrder(o); }
   else if(act==="del"){
-    if(confirm("Delete this order for "+(o.customer||o.barcode||"")+"?")){
+    var done = o.status==="collected";
+    var msg = done ? ("Permanently delete this completed docket for "+(o.customer||o.barcode||"")+"? This can’t be undone.")
+                   : ("Delete this order for "+(o.customer||o.barcode||"")+"? This can’t be undone.");
+    if(confirm(msg)){
       (o.photos||[]).forEach(function(pid){ Photos.del(pid); });
       (o.videos||[]).forEach(function(vid){ Photos.del(vid); Photos.del(vid+"__p"); });
-      orders=orders.filter(function(x){return x.uid!==id;}); persist(); toast("Order deleted");
+      orders=orders.filter(function(x){return x.uid!==id;}); persist(); toast(done?"Permanently deleted":"Order deleted");
     }
   }
 });
@@ -1030,6 +1077,7 @@ document.getElementById("saveBtn").addEventListener("click", function(){
     data.uid=uid(); data.created=Date.now();
     orders.unshift(data); saved=data;
   }
+  if(filter==="archive" && saved.status!=="collected"){ filter="all"; }
   render();
   var added=maybeAutoRemind(saved);
   Store.save(orders);
@@ -1039,7 +1087,7 @@ document.getElementById("saveBtn").addEventListener("click", function(){
 
 /* open/close overlays */
 document.getElementById("addBtn").addEventListener("click", function(){ openForm(null); });
-function closeAll(){ document.querySelectorAll(".overlay").forEach(function(o){o.classList.remove("show");}); stopScanner(); stopViewer(); revokeFormUrls(); }
+function closeAll(){ document.querySelectorAll(".overlay").forEach(function(o){o.classList.remove("show");}); stopScanner(); stopViewer(); revokeFormUrls(); revokePreviewUrls(); }
 function closeScanner(){ document.getElementById("scanOverlay").classList.remove("show"); stopScanner(); }
 document.querySelectorAll("[data-close]").forEach(function(b){ b.addEventListener("click",closeAll); });
 document.querySelectorAll(".overlay").forEach(function(ov){
@@ -1392,10 +1440,68 @@ function openVideo(url){ if(!url) return; stopViewer(); var v=document.getElemen
 function closeViewer(){ document.getElementById("photoView").classList.remove("show"); stopViewer(); }
 document.getElementById("photoClose").addEventListener("click", closeViewer);
 
+/* ---------- Read-only preview ---------- */
+var previewActiveId=null, previewUrls=[];
+function revokePreviewUrls(){ previewUrls.forEach(function(u){ try{URL.revokeObjectURL(u);}catch(e){} }); previewUrls=[]; }
+function previewRow(label, valHTML){ return '<div class="pv-row"><span class="pv-lbl">'+esc(label)+'</span><span class="pv-val">'+valHTML+'</span></div>'; }
+function fillPreviewStrip(container, ids, isVideo){
+  if(!container) return;
+  container.innerHTML="";
+  (ids||[]).forEach(function(id){
+    var div=document.createElement("div"); div.className=isVideo?"video-thumb":"photo-thumb";
+    var img=document.createElement("img"); img.alt=isVideo?"video":"photo"; div.appendChild(img);
+    if(isVideo){ var play=document.createElement("span"); play.className="play"; play.innerHTML='<svg width="14" height="14" viewBox="0 0 24 24" fill="#fff"><path d="M8 5v14l11-7z"/></svg>'; div.appendChild(play); }
+    container.appendChild(div);
+    Photos.get(isVideo?(id+"__p"):id).then(function(blob){ if(blob){ var u=URL.createObjectURL(blob); previewUrls.push(u); img.src=u; } });
+    div.addEventListener("click", function(){ if(isVideo){ playVideoById(id); } else if(img.src){ openPhoto(img.src); } });
+  });
+}
+function openPreview(o){
+  previewActiveId=o.uid;
+  var over=isOverdue(o), soon=isSoon(o), bal=balance(o);
+  document.getElementById("pv_title").textContent = o.customer || "(no name)";
+  var html="";
+  html+='<div class="pv-top"><span class="badge '+o.status+'">'+(STATUS_LABEL[o.status]||o.status)+'</span>'+(over?'<span class="pv-over">● Overdue</span>':'')+'</div>';
+  html+='<div class="pv-sec">';
+  if((o.description||"").trim()) html+=previewRow("Item & repair", esc(o.description));
+  if((o.contact||"").trim()){
+    var c=o.contact.trim();
+    var href=c.indexOf("@")>-1 ? ("mailto:"+encodeURIComponent(c)) : ("tel:"+c.replace(/[^0-9+]/g,""));
+    html+=previewRow("Contact", '<a href="'+href+'">'+esc(c)+'</a>');
+  }
+  html+=previewRow("Docket no.", esc(o.barcode||"—"));
+  if((o.serial||"").trim()) html+=previewRow("Serial", esc(o.serial));
+  html+=previewRow("Received", esc(fmtDate(o.received)));
+  html+=previewRow("Due", o.due ? (esc(fmtDate(o.due))+(over?' <span class="pv-over">· overdue</span>':(soon?' <span class="pv-soon">· soon</span>':''))) : "—");
+  html+='</div>';
+  html+='<div class="ledger" style="margin-top:16px;">'+
+    '<div class="lcell"><label>Cost</label><span class="v">'+money(o.cost)+'</span></div>'+
+    '<div class="lcell"><label>Paid</label><span class="v">'+money(o.paid)+'</span></div>'+
+    '<div class="lcell bal"><label>Balance</label><span class="v '+(bal>0.0001?"owing":"clear")+'">'+money(bal)+'</span></div>'+
+  '</div>';
+  if((o.notes||"").trim()){ html+='<div class="pv-sec"><div class="pv-sec-h">Notes</div><div class="pv-notes">'+esc(o.notes)+'</div></div>'; }
+  var nP=(o.photos&&o.photos.length)||0, nV=(o.videos&&o.videos.length)||0;
+  if(nP){ html+='<div class="pv-sec"><div class="pv-sec-h">Photos ('+nP+')</div><div class="photos" id="pv_photos"></div></div>'; }
+  if(nV){ html+='<div class="pv-sec"><div class="pv-sec-h">Videos ('+nV+')</div><div class="photos" id="pv_videos"></div></div>'; }
+  revokePreviewUrls();
+  document.getElementById("previewBody").innerHTML=html;
+  if(nP) fillPreviewStrip(document.getElementById("pv_photos"), o.photos, false);
+  if(nV) fillPreviewStrip(document.getElementById("pv_videos"), o.videos, true);
+  document.getElementById("previewOverlay").classList.add("show");
+}
+document.getElementById("pv_edit").addEventListener("click", function(){
+  var o=orders.find(function(x){return x.uid===previewActiveId;});
+  document.getElementById("previewOverlay").classList.remove("show"); revokePreviewUrls();
+  if(o) openForm(o);
+});
+document.getElementById("pv_print").addEventListener("click", function(){
+  var o=orders.find(function(x){return x.uid===previewActiveId;});
+  if(o) printOrder(o);
+});
+
 /* ---------- Print ---------- */
 function printRow(label,val){ return '<tr><th>'+esc(label)+'</th><td>'+esc(val)+'</td></tr>'; }
 function blobToDataURL(blob){ return new Promise(function(res){ try{ var r=new FileReader(); r.onload=function(){res(r.result);}; r.onerror=function(){res(null);}; r.readAsDataURL(blob); }catch(e){ res(null); } }); }
-var PRINT_CSS="*{box-sizing:border-box;}body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#111;margin:22px;}h1{font-size:20px;letter-spacing:.12em;text-transform:uppercase;margin:0;}.p-head{display:flex;justify-content:space-between;align-items:flex-end;border-bottom:2px solid #111;padding-bottom:8px;margin-bottom:14px;}.p-id{font-family:monospace;font-size:13px;color:#333;}table{width:100%;border-collapse:collapse;font-size:13px;}th{text-align:left;width:32%;vertical-align:top;color:#555;font-weight:600;padding:7px 8px;border-bottom:1px solid #ddd;}td{padding:7px 8px;border-bottom:1px solid #ddd;vertical-align:top;white-space:pre-wrap;}.p-photos{display:flex;flex-wrap:wrap;gap:10px;margin-top:16px;}.p-photos img{width:48%;max-height:360px;object-fit:contain;border:1px solid #ccc;}.p-foot{margin-top:18px;font-size:11px;color:#888;}";
 async function doPrint(d){
   var bal=num(d.cost)-num(d.paid);
   var rows="";
@@ -1414,27 +1520,19 @@ async function doPrint(d){
   var photoIds=d.photos||[];
   var imgsHtml="";
   for(var i=0;i<photoIds.length;i++){ try{ var b=await Photos.get(photoIds[i]); if(b){ var u=await blobToDataURL(b); if(u) imgsHtml+='<img src="'+u+'">'; } }catch(e){} }
-  var photosBlock = imgsHtml ? '<div class="p-photos">'+imgsHtml+'</div>' : '';
-  var docHtml='<!DOCTYPE html><html><head><meta charset="utf-8"><title>Repair Docket</title><style>'+PRINT_CSS+'</style></head><body>'+
-    '<div class="p-head"><h1>Repair Docket</h1><span class="p-id">'+esc(d.barcode||"")+'</span></div>'+
-    '<table>'+rows+'</table>'+photosBlock+
-    '<div class="p-foot">Printed '+fmtDate(todayISO())+'</div>'+
-    '</body></html>';
-  var iframe=document.createElement("iframe");
-  iframe.setAttribute("aria-hidden","true");
-  iframe.style.cssText="position:fixed;right:0;bottom:0;width:1px;height:1px;border:0;opacity:0;";
-  document.body.appendChild(iframe);
-  function removeIframe(){ try{ if(iframe.parentNode) iframe.parentNode.removeChild(iframe); }catch(e){} }
-  try{
-    var win=iframe.contentWindow, idoc=win.document;
-    idoc.open(); idoc.write(docHtml); idoc.close();
-    var imgs=idoc.images;
-    await Promise.all(Array.prototype.map.call(imgs, function(im){ return (im.complete && im.naturalWidth) ? Promise.resolve() : new Promise(function(r){ im.onload=r; im.onerror=r; setTimeout(r,3000); }); }));
-    await new Promise(function(r){ setTimeout(r, 250); });
-    try{ win.onafterprint=removeIframe; }catch(e){}
-    win.focus(); win.print();
-  }catch(e){ toast("Couldn’t open the printer — try again"); removeIframe(); }
-  setTimeout(removeIframe, 60000);
+  var photosHtml = imgsHtml ? '<div class="p-photos">'+imgsHtml+'</div>' : '';
+  var area=document.getElementById("printArea");
+  area.innerHTML =
+    '<div class="p-doc">'+
+      '<div class="p-head"><h1>Repair Docket</h1><span class="p-id">'+esc(d.barcode||"")+'</span></div>'+
+      '<table class="p-info">'+rows+'</table>'+
+      photosHtml+
+      '<div class="p-foot">Printed '+fmtDate(todayISO())+'</div>'+
+    '</div>';
+  var imgs=area.querySelectorAll("img");
+  await Promise.all(Array.prototype.map.call(imgs, function(im){ return (im.complete && im.naturalWidth) ? Promise.resolve() : new Promise(function(r){ im.onload=r; im.onerror=r; setTimeout(r,3000); }); }));
+  await new Promise(function(r){ setTimeout(r, 180); });
+  try{ window.print(); }catch(e){ toast("Couldn’t open the printer"); }
 }
 function printFromForm(){
   doPrint({
