@@ -345,6 +345,7 @@
   .p-info th{text-align:left;width:32%;vertical-align:top;color:#555;font-weight:600;padding:7px 8px;border-bottom:1px solid #ddd;}
   .p-info td{padding:7px 8px;border-bottom:1px solid #ddd;vertical-align:top;white-space:pre-wrap;}
   .p-photos{display:flex;flex-wrap:wrap;gap:10px;margin-top:16px;}
+  .p-photos .p-sec-h{width:100%;font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:#555;font-weight:700;margin:0 0 -2px;}
   .p-photos img{width:48%;max-height:360px;object-fit:contain;border:1px solid #ccc;border-radius:4px;}
   .p-foot{margin-top:18px;font-size:11px;color:#888;}
   @media print{
@@ -1180,6 +1181,12 @@ async function ensureTesseract(){
   for(var i=0;i<urls.length;i++){ try{ await loadScript(urls[i]); if(window.Tesseract) return true; }catch(e){} }
   return !!window.Tesseract;
 }
+async function ensureHtml2Canvas(){
+  if(window.html2canvas) return true;
+  var urls=["https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js","https://unpkg.com/html2canvas@1.4.1/dist/html2canvas.min.js"];
+  for(var i=0;i<urls.length;i++){ try{ await loadScript(urls[i]); if(window.html2canvas) return true; }catch(e){} }
+  return !!window.html2canvas;
+}
 async function getOCRWorker(){
   if(ocrWorker) return ocrWorker;
   ocrWorker=await Tesseract.createWorker("eng");
@@ -1520,15 +1527,34 @@ async function doPrint(d){
   var photoIds=d.photos||[];
   var imgsHtml="";
   for(var i=0;i<photoIds.length;i++){ try{ var b=await Photos.get(photoIds[i]); if(b){ var u=await blobToDataURL(b); if(u) imgsHtml+='<img src="'+u+'">'; } }catch(e){} }
-  var photosHtml = imgsHtml ? '<div class="p-photos">'+imgsHtml+'</div>' : '';
-  var area=document.getElementById("printArea");
-  area.innerHTML =
+  var photosHtml = imgsHtml ? '<div class="p-photos"><div class="p-sec-h">Photos</div>'+imgsHtml+'</div>' : '';
+  var docInner =
     '<div class="p-doc">'+
       '<div class="p-head"><h1>Repair Docket</h1><span class="p-id">'+esc(d.barcode||"")+'</span></div>'+
       '<table class="p-info">'+rows+'</table>'+
       photosHtml+
       '<div class="p-foot">Printed '+fmtDate(todayISO())+'</div>'+
     '</div>';
+  var area=document.getElementById("printArea");
+  var rendered=false;
+  toast("Preparing print…");
+  try{ await ensureHtml2Canvas(); }catch(e){}
+  if(window.html2canvas){
+    try{
+      var stage=document.createElement("div");
+      stage.style.cssText="position:fixed;left:-10000px;top:0;width:760px;background:#fff;z-index:-1;";
+      stage.innerHTML=docInner;
+      document.body.appendChild(stage);
+      var simgs=stage.querySelectorAll("img");
+      await Promise.all(Array.prototype.map.call(simgs, function(im){ return (im.complete && im.naturalWidth) ? Promise.resolve() : new Promise(function(r){ im.onload=r; im.onerror=r; setTimeout(r,5000); }); }));
+      await new Promise(function(r){ setTimeout(r,60); });
+      var canvas=await html2canvas(stage, {scale:2, backgroundColor:"#ffffff", useCORS:true, logging:false, windowWidth:760});
+      try{ document.body.removeChild(stage); }catch(e){}
+      area.innerHTML='<img src="'+canvas.toDataURL("image/jpeg",0.92)+'" style="width:100%;height:auto;display:block;">';
+      rendered=true;
+    }catch(e){ rendered=false; }
+  }
+  if(!rendered){ area.innerHTML=docInner; }
   var imgs=area.querySelectorAll("img");
   await Promise.all(Array.prototype.map.call(imgs, function(im){ return (im.complete && im.naturalWidth) ? Promise.resolve() : new Promise(function(r){ im.onload=r; im.onerror=r; setTimeout(r,3000); }); }));
   await new Promise(function(r){ setTimeout(r, 180); });
