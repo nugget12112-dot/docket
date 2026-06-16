@@ -586,6 +586,7 @@
     <div class="set-row tap" id="m_csv"><span class="lbl">Export to spreadsheet (CSV)</span><span class="chev">›</span></div>
 
     <div class="modenote" id="modeNote"></div>
+    <div style="text-align:center;color:var(--faint);font-size:12px;margin:18px 0 4px;">Docket v1.1 · EMESSA</div>
     <input type="file" id="restoreFile" accept="application/json,.json" hidden />
   </div>
 </div>
@@ -707,7 +708,7 @@ function processImage(file, maxDim, quality){
 var Settings = (function(){
   var KEY="docket_settings_v1";
   var hasClaude=(typeof window!=="undefined" && window.storage && typeof window.storage.get==="function");
-  var defaults={autoRemind:true, remindTime:"09:00", notifyOnOpen:false, theme:null, lockOn:false, pinHash:null, pinSalt:null, finishMsgOn:false, finishMsg:"Hi {name}, your repair ({item}) is ready to collect. Balance due: {balance}. Thank you!"};
+  var defaults={autoRemind:true, remindTime:"09:00", notifyOnOpen:false, theme:null, lockOn:false, pinHash:null, pinSalt:null, finishMsgOn:true, finishMsg:"Hi {name}, your repair ({item}) is ready to collect. Balance due: {balance}. Thank you!"};
   var cache=Object.assign({},defaults);
   async function load(){
     try{
@@ -716,6 +717,7 @@ var Settings = (function(){
       else if(typeof localStorage!=="undefined"){ raw=localStorage.getItem(KEY); }
       if(raw){ cache=Object.assign({},defaults,JSON.parse(raw)); }
     }catch(e){}
+    if(!cache.finishMsgRev){ cache.finishMsgOn=true; cache.finishMsgRev=1; try{ await save(); }catch(e){} }
     return cache;
   }
   async function save(){
@@ -876,8 +878,8 @@ listEl.addEventListener("click", function(e){
     if(!confirm("Change this order to “"+(STATUS_LABEL[target]||target)+"”?")) return;
     o.status=target; o.updated=Date.now();
     render(); Store.save(orders);
+    if(target==="collected") toast("Moved to Completed");
     if(target==="ready") maybeMessageCustomer(o);
-    else if(target==="collected") toast("Moved to Completed");
   }
   else if(act==="view"){ openPreview(o); }
   else if(act==="edit"){ openForm(o); }
