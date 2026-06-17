@@ -357,6 +357,12 @@
   .p-keep{margin-top:12px;font-size:11.5px;font-weight:600;color:#222;line-height:1.5;background:#f7f2e8;border:1px solid #e4dac4;border-radius:6px;padding:9px 12px;}
   .p-terms{margin:6px 0 14px;font-size:10px;color:#555;line-height:1.5;}
   .p-foot{margin-top:14px;font-size:11px;color:#888;}
+  .p-p2head{text-align:center;border-bottom:2px solid #111;padding-bottom:10px;margin-bottom:16px;}
+  .p-logo2{width:92px;height:auto;display:block;margin:0 auto 6px;}
+  .p-p2line{font-size:14px;}
+  .p-p2line strong{text-transform:uppercase;letter-spacing:.12em;}
+  .p-p2id{font-family:var(--mono);color:#333;}
+  .p-p2name{font-size:13px;color:#444;margin-top:3px;}
   /* signature pad */
   .sigwrap{position:relative;}
   .sigpad{width:100%;height:150px;display:block;background:#fff;border:1px dashed var(--line);border-radius:12px;touch-action:none;cursor:crosshair;}
@@ -367,6 +373,7 @@
     #printArea{display:block !important;}
     .p-shot{max-width:186mm;max-height:252mm;width:auto !important;height:auto !important;display:block;margin:0 auto;}
     .p-photos img{break-inside:avoid;}
+    .p-sheet2{page-break-before:always;break-before:page;}
     @page{margin:11mm;}
   }
 
@@ -596,7 +603,7 @@
     <div class="set-row tap" id="m_csv"><span class="lbl">Export to spreadsheet (CSV)</span><span class="chev">›</span></div>
 
     <div class="modenote" id="modeNote"></div>
-    <div style="text-align:center;color:var(--faint);font-size:12px;margin:18px 0 4px;">Docket v1.8 · EMESSA</div>
+    <div style="text-align:center;color:var(--faint);font-size:12px;margin:18px 0 4px;">Docket v2.0 · EMESSA</div>
     <input type="file" id="restoreFile" accept="application/json,.json" hidden />
   </div>
 </div>
@@ -1569,6 +1576,18 @@ var SHOP_TERMS="PLEASE NOTE: We reserve the right to require proof of I.D. shoul
 var SHOP_KEEPSAFE="Please keep this docket safe — it is your proof of ownership. If it is lost or misplaced we may be unable to confirm this order is yours, so please contact EMESSA as soon as possible.";
 function printRow(label,val){ return '<tr><th>'+esc(label)+'</th><td>'+esc(val)+'</td></tr>'; }
 function blobToDataURL(blob){ return new Promise(function(res){ try{ var r=new FileReader(); r.onload=function(){res(r.result);}; r.onerror=function(){res(null);}; r.readAsDataURL(blob); }catch(e){ res(null); } }); }
+async function rasterizeDoc(bodyHtml){
+  var stage=document.createElement("div");
+  stage.style.cssText="position:fixed;left:-10000px;top:0;width:760px;background:#fff;z-index:-1;";
+  stage.innerHTML='<div class="p-doc">'+bodyHtml+'</div>';
+  document.body.appendChild(stage);
+  var simgs=stage.querySelectorAll("img");
+  await Promise.all(Array.prototype.map.call(simgs, function(im){ return (im.complete && im.naturalWidth) ? Promise.resolve() : new Promise(function(r){ im.onload=r; im.onerror=r; setTimeout(r,5000); }); }));
+  await new Promise(function(r){ setTimeout(r,60); });
+  var canvas=await html2canvas(stage, {scale:2, backgroundColor:"#ffffff", useCORS:true, logging:false, windowWidth:760});
+  try{ document.body.removeChild(stage); }catch(e){}
+  return canvas.toDataURL("image/jpeg",0.92);
+}
 async function doPrint(d){
   var bal=num(d.cost)-num(d.paid);
   var rows="";
@@ -1589,17 +1608,31 @@ async function doPrint(d){
   for(var i=0;i<photoIds.length;i++){ try{ var b=await Photos.get(photoIds[i]); if(b){ var u=await blobToDataURL(b); if(u) imgsHtml+='<img src="'+u+'">'; } }catch(e){} }
   var photosHtml = imgsHtml ? '<div class="p-photos"><div class="p-sec-h">Photos</div>'+imgsHtml+'</div>' : '';
   var sigHtml = (d.signature||"") ? '<div class="p-sig"><div class="p-sec-h">Customer signature</div><img src="'+d.signature+'"></div>' : '';
-  var docInner =
-    '<div class="p-doc">'+
-      '<div class="p-letterhead"><img class="p-logo" src="'+SHOP_LOGO+'"><div class="p-shop-addr">'+esc(SHOP_ADDR)+'</div></div>'+
-      '<div class="p-terms">'+esc(SHOP_TERMS)+'</div>'+
-      '<div class="p-head"><h1>Repair Docket</h1><span class="p-id">'+esc(docketNo(d))+'</span></div>'+
-      '<table class="p-info">'+rows+'</table>'+
-      photosHtml+
-      sigHtml+
-      '<div class="p-keep">'+esc(SHOP_KEEPSAFE)+'</div>'+
-      '<div class="p-foot">Printed '+fmtDate(todayISO())+'</div>'+
-    '</div>';
+  var custName=(d.customer||"").trim();
+  var onePageBody =
+    '<div class="p-letterhead"><img class="p-logo" src="'+SHOP_LOGO+'"><div class="p-shop-addr">'+esc(SHOP_ADDR)+'</div></div>'+
+    '<div class="p-terms">'+esc(SHOP_TERMS)+'</div>'+
+    '<div class="p-head"><h1>Repair Docket</h1><span class="p-id">'+esc(docketNo(d))+'</span></div>'+
+    '<table class="p-info">'+rows+'</table>'+
+    photosHtml+
+    sigHtml+
+    '<div class="p-keep">'+esc(SHOP_KEEPSAFE)+'</div>'+
+    '<div class="p-foot">Printed '+fmtDate(todayISO())+'</div>';
+  var page1Body =
+    '<div class="p-letterhead"><img class="p-logo" src="'+SHOP_LOGO+'"><div class="p-shop-addr">'+esc(SHOP_ADDR)+'</div></div>'+
+    '<div class="p-terms">'+esc(SHOP_TERMS)+'</div>'+
+    '<div class="p-head"><h1>Repair Docket</h1><span class="p-id">'+esc(docketNo(d))+'</span></div>'+
+    '<table class="p-info">'+rows+'</table>'+
+    photosHtml+
+    '<div class="p-foot">Page 1 of 2</div>';
+  var page2Body =
+    '<div class="p-p2head"><img class="p-logo2" src="'+SHOP_LOGO+'">'+
+      '<div class="p-p2line"><strong>Repair Docket</strong> · <span class="p-p2id">'+esc(docketNo(d))+'</span></div>'+
+      (custName ? '<div class="p-p2name">'+esc(custName)+'</div>' : '')+
+    '</div>'+
+    sigHtml+
+    '<div class="p-keep">'+esc(SHOP_KEEPSAFE)+'</div>'+
+    '<div class="p-foot">Printed '+fmtDate(todayISO())+' · Page 2 of 2</div>';
   var area=document.getElementById("printArea");
   var rendered=false;
   toast("Preparing print…");
@@ -1608,18 +1641,28 @@ async function doPrint(d){
     try{
       var stage=document.createElement("div");
       stage.style.cssText="position:fixed;left:-10000px;top:0;width:760px;background:#fff;z-index:-1;";
-      stage.innerHTML=docInner;
+      stage.innerHTML='<div class="p-doc">'+onePageBody+'</div>';
       document.body.appendChild(stage);
       var simgs=stage.querySelectorAll("img");
       await Promise.all(Array.prototype.map.call(simgs, function(im){ return (im.complete && im.naturalWidth) ? Promise.resolve() : new Promise(function(r){ im.onload=r; im.onerror=r; setTimeout(r,5000); }); }));
       await new Promise(function(r){ setTimeout(r,60); });
-      var canvas=await html2canvas(stage, {scale:2, backgroundColor:"#ffffff", useCORS:true, logging:false, windowWidth:760});
-      try{ document.body.removeChild(stage); }catch(e){}
-      area.innerHTML='<img class="p-shot" src="'+canvas.toDataURL("image/jpeg",0.92)+'" style="display:block;margin:0 auto;">';
+      var contentH=stage.firstChild.offsetHeight||stage.scrollHeight;
+      if(contentH<=1080){
+        var c1=await html2canvas(stage, {scale:2, backgroundColor:"#ffffff", useCORS:true, logging:false, windowWidth:760});
+        try{ document.body.removeChild(stage); }catch(e){}
+        area.innerHTML='<div class="p-sheet"><img class="p-shot" src="'+c1.toDataURL("image/jpeg",0.92)+'"></div>';
+      }else{
+        try{ document.body.removeChild(stage); }catch(e){}
+        var img1=await rasterizeDoc(page1Body);
+        var img2=await rasterizeDoc(page2Body);
+        area.innerHTML=
+          '<div class="p-sheet"><img class="p-shot" src="'+img1+'"></div>'+
+          '<div class="p-sheet p-sheet2"><img class="p-shot" src="'+img2+'"></div>';
+      }
       rendered=true;
     }catch(e){ rendered=false; }
   }
-  if(!rendered){ area.innerHTML=docInner; }
+  if(!rendered){ area.innerHTML='<div class="p-doc">'+onePageBody+'</div>'; }
   var imgs=area.querySelectorAll("img");
   await Promise.all(Array.prototype.map.call(imgs, function(im){ return (im.complete && im.naturalWidth) ? Promise.resolve() : new Promise(function(r){ im.onload=r; im.onerror=r; setTimeout(r,3000); }); }));
   await new Promise(function(r){ setTimeout(r, 180); });
