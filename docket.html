@@ -350,7 +350,8 @@
   .p-info td{padding:7px 8px;border-bottom:1px solid #ddd;vertical-align:top;white-space:pre-wrap;}
   .p-photos{display:flex;flex-wrap:wrap;gap:10px;margin-top:12px;}
   .p-photos .p-sec-h{width:100%;font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:#555;font-weight:700;margin:0 0 -2px;}
-  .p-photos img{width:46%;max-height:160px;object-fit:contain;border:1px solid #ccc;border-radius:4px;}
+  .p-photos img{width:48%;max-height:360px;object-fit:contain;border:1px solid #ccc;border-radius:4px;}
+  .p-photos.p-photos-sm img{width:46%;max-height:160px;}
   .p-sig{margin-top:12px;}
   .p-sig .p-sec-h{font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:#555;font-weight:700;margin:0 0 6px;}
   .p-sig img{max-width:220px;max-height:80px;border:1px solid #ccc;border-radius:4px;display:block;background:#fff;}
@@ -589,6 +590,12 @@
       <label class="switch"><input type="checkbox" id="sw_dark"><span class="track"><span class="knob"></span></span></label>
     </div>
 
+    <div class="set-section">Printing</div>
+    <div class="set-row">
+      <span class="lbl">Larger photos on printed docket<small>Turn off for smaller thumbnails that help the docket fit on a single page</small></span>
+      <label class="switch"><input type="checkbox" id="sw_bigphotos"><span class="track"><span class="knob"></span></span></label>
+    </div>
+
     <div class="set-section">Privacy</div>
     <div class="set-row">
       <span class="lbl">App lock (PIN)<small>Require a 4-digit code to open Docket</small></span>
@@ -603,7 +610,7 @@
     <div class="set-row tap" id="m_csv"><span class="lbl">Export to spreadsheet (CSV)</span><span class="chev">›</span></div>
 
     <div class="modenote" id="modeNote"></div>
-    <div style="text-align:center;color:var(--faint);font-size:12px;margin:18px 0 4px;">Docket v2.0 · EMESSA</div>
+    <div style="text-align:center;color:var(--faint);font-size:12px;margin:18px 0 4px;">Docket v2.2 · EMESSA</div>
     <input type="file" id="restoreFile" accept="application/json,.json" hidden />
   </div>
 </div>
@@ -725,7 +732,7 @@ function processImage(file, maxDim, quality){
 var Settings = (function(){
   var KEY="docket_settings_v1";
   var hasClaude=(typeof window!=="undefined" && window.storage && typeof window.storage.get==="function");
-  var defaults={autoRemind:true, remindTime:"09:00", notifyOnOpen:false, theme:null, lockOn:false, pinHash:null, pinSalt:null, finishMsgOn:true, finishMsg:"Hi {name}, your repair ({item}) is ready to collect. Balance due: {balance}. Thank you!"};
+  var defaults={autoRemind:true, remindTime:"09:00", notifyOnOpen:false, theme:null, lockOn:false, pinHash:null, pinSalt:null, finishMsgOn:true, printLargePhotos:true, finishMsg:"Hi {name}, your repair ({item}) is ready to collect. Balance due: {balance}. Thank you!"};
   var cache=Object.assign({},defaults);
   async function load(){
     try{
@@ -1576,6 +1583,18 @@ var SHOP_TERMS="PLEASE NOTE: We reserve the right to require proof of I.D. shoul
 var SHOP_KEEPSAFE="Please keep this docket safe — it is your proof of ownership. If it is lost or misplaced we may be unable to confirm this order is yours, so please contact EMESSA as soon as possible.";
 function printRow(label,val){ return '<tr><th>'+esc(label)+'</th><td>'+esc(val)+'</td></tr>'; }
 function blobToDataURL(blob){ return new Promise(function(res){ try{ var r=new FileReader(); r.onload=function(){res(r.result);}; r.onerror=function(){res(null);}; r.readAsDataURL(blob); }catch(e){ res(null); } }); }
+async function measureDoc(bodyHtml){
+  var stage=document.createElement("div");
+  stage.style.cssText="position:fixed;left:-10000px;top:0;width:760px;background:#fff;z-index:-1;";
+  stage.innerHTML='<div class="p-doc">'+bodyHtml+'</div>';
+  document.body.appendChild(stage);
+  var simgs=stage.querySelectorAll("img");
+  await Promise.all(Array.prototype.map.call(simgs, function(im){ return (im.complete && im.naturalWidth) ? Promise.resolve() : new Promise(function(r){ im.onload=r; im.onerror=r; setTimeout(r,5000); }); }));
+  await new Promise(function(r){ setTimeout(r,40); });
+  var h=stage.firstChild.offsetHeight||stage.scrollHeight;
+  try{ document.body.removeChild(stage); }catch(e){}
+  return h;
+}
 async function rasterizeDoc(bodyHtml){
   var stage=document.createElement("div");
   stage.style.cssText="position:fixed;left:-10000px;top:0;width:760px;background:#fff;z-index:-1;";
@@ -1606,55 +1625,42 @@ async function doPrint(d){
   var photoIds=d.photos||[];
   var imgsHtml="";
   for(var i=0;i<photoIds.length;i++){ try{ var b=await Photos.get(photoIds[i]); if(b){ var u=await blobToDataURL(b); if(u) imgsHtml+='<img src="'+u+'">'; } }catch(e){} }
-  var photosHtml = imgsHtml ? '<div class="p-photos"><div class="p-sec-h">Photos</div>'+imgsHtml+'</div>' : '';
+  var bigPhotos = Settings.get().printLargePhotos !== false;
+  var photosHtml = imgsHtml ? '<div class="p-photos'+(bigPhotos?'':' p-photos-sm')+'"><div class="p-sec-h">Photos</div>'+imgsHtml+'</div>' : '';
   var sigHtml = (d.signature||"") ? '<div class="p-sig"><div class="p-sec-h">Customer signature</div><img src="'+d.signature+'"></div>' : '';
   var custName=(d.customer||"").trim();
-  var onePageBody =
+  var letterHtml =
     '<div class="p-letterhead"><img class="p-logo" src="'+SHOP_LOGO+'"><div class="p-shop-addr">'+esc(SHOP_ADDR)+'</div></div>'+
     '<div class="p-terms">'+esc(SHOP_TERMS)+'</div>'+
     '<div class="p-head"><h1>Repair Docket</h1><span class="p-id">'+esc(docketNo(d))+'</span></div>'+
-    '<table class="p-info">'+rows+'</table>'+
-    photosHtml+
-    sigHtml+
-    '<div class="p-keep">'+esc(SHOP_KEEPSAFE)+'</div>'+
-    '<div class="p-foot">Printed '+fmtDate(todayISO())+'</div>';
-  var page1Body =
-    '<div class="p-letterhead"><img class="p-logo" src="'+SHOP_LOGO+'"><div class="p-shop-addr">'+esc(SHOP_ADDR)+'</div></div>'+
-    '<div class="p-terms">'+esc(SHOP_TERMS)+'</div>'+
-    '<div class="p-head"><h1>Repair Docket</h1><span class="p-id">'+esc(docketNo(d))+'</span></div>'+
-    '<table class="p-info">'+rows+'</table>'+
-    photosHtml+
-    '<div class="p-foot">Page 1 of 2</div>';
-  var page2Body =
+    '<table class="p-info">'+rows+'</table>';
+  var p2headHtml =
     '<div class="p-p2head"><img class="p-logo2" src="'+SHOP_LOGO+'">'+
       '<div class="p-p2line"><strong>Repair Docket</strong> · <span class="p-p2id">'+esc(docketNo(d))+'</span></div>'+
       (custName ? '<div class="p-p2name">'+esc(custName)+'</div>' : '')+
-    '</div>'+
-    sigHtml+
-    '<div class="p-keep">'+esc(SHOP_KEEPSAFE)+'</div>'+
-    '<div class="p-foot">Printed '+fmtDate(todayISO())+' · Page 2 of 2</div>';
+    '</div>';
+  var keepHtml='<div class="p-keep">'+esc(SHOP_KEEPSAFE)+'</div>';
+  var footP1='<div class="p-foot">Page 1 of 2</div>';
+  var footP2='<div class="p-foot">Printed '+fmtDate(todayISO())+' · Page 2 of 2</div>';
+  var onePageBody = letterHtml + photosHtml + sigHtml + keepHtml + '<div class="p-foot">Printed '+fmtDate(todayISO())+'</div>';
+  var page1Body = letterHtml + photosHtml + footP1;              /* split A: photos on page 1 */
+  var page2Body = p2headHtml + sigHtml + keepHtml + footP2;
+  var page1Lite = letterHtml + footP1;                          /* split B: text only on page 1 */
+  var page2Photos = p2headHtml + photosHtml + sigHtml + keepHtml + footP2;
   var area=document.getElementById("printArea");
   var rendered=false;
   toast("Preparing print…");
   try{ await ensureHtml2Canvas(); }catch(e){}
   if(window.html2canvas){
     try{
-      var stage=document.createElement("div");
-      stage.style.cssText="position:fixed;left:-10000px;top:0;width:760px;background:#fff;z-index:-1;";
-      stage.innerHTML='<div class="p-doc">'+onePageBody+'</div>';
-      document.body.appendChild(stage);
-      var simgs=stage.querySelectorAll("img");
-      await Promise.all(Array.prototype.map.call(simgs, function(im){ return (im.complete && im.naturalWidth) ? Promise.resolve() : new Promise(function(r){ im.onload=r; im.onerror=r; setTimeout(r,5000); }); }));
-      await new Promise(function(r){ setTimeout(r,60); });
-      var contentH=stage.firstChild.offsetHeight||stage.scrollHeight;
-      if(contentH<=1080){
-        var c1=await html2canvas(stage, {scale:2, backgroundColor:"#ffffff", useCORS:true, logging:false, windowWidth:760});
-        try{ document.body.removeChild(stage); }catch(e){}
-        area.innerHTML='<div class="p-sheet"><img class="p-shot" src="'+c1.toDataURL("image/jpeg",0.92)+'"></div>';
+      var hAll=await measureDoc(onePageBody);
+      if(hAll<=1080){
+        var img=await rasterizeDoc(onePageBody);
+        area.innerHTML='<div class="p-sheet"><img class="p-shot" src="'+img+'"></div>';
       }else{
-        try{ document.body.removeChild(stage); }catch(e){}
-        var img1=await rasterizeDoc(page1Body);
-        var img2=await rasterizeDoc(page2Body);
+        var photosToP2 = !!imgsHtml && (await measureDoc(page1Body))>1080;
+        var img1=await rasterizeDoc(photosToP2?page1Lite:page1Body);
+        var img2=await rasterizeDoc(photosToP2?page2Photos:page2Body);
         area.innerHTML=
           '<div class="p-sheet"><img class="p-shot" src="'+img1+'"></div>'+
           '<div class="p-sheet p-sheet2"><img class="p-shot" src="'+img2+'"></div>';
@@ -1761,6 +1767,7 @@ function refreshSettingsUI(){
   var l=document.getElementById("sw_lock"); if(l) l.checked=!!s.lockOn;
   var cp=document.getElementById("m_changepin"); if(cp) cp.style.display=s.lockOn?"flex":"none";
   var fm=document.getElementById("sw_finishmsg"); if(fm) fm.checked=!!s.finishMsgOn;
+  var bp=document.getElementById("sw_bigphotos"); if(bp) bp.checked=(s.printLargePhotos!==false);
   var ft=document.getElementById("f_finishmsg"); if(ft) ft.value=s.finishMsg||"";
 }
 document.getElementById("sw_auto").addEventListener("change", async function(e){ Settings.set("autoRemind", e.target.checked); await Settings.save(); toast(e.target.checked?"Auto reminders on":"Auto reminders off"); });
@@ -1792,6 +1799,7 @@ document.getElementById("m_changepin").addEventListener("click", function(){
 document.getElementById("m_remindall").addEventListener("click", function(){ remindAll(); closeAll(); });
 
 document.getElementById("sw_finishmsg").addEventListener("change", async function(e){ Settings.set("finishMsgOn", e.target.checked); await Settings.save(); toast(e.target.checked?"Customer message on":"Customer message off"); });
+document.getElementById("sw_bigphotos").addEventListener("change", async function(e){ Settings.set("printLargePhotos", e.target.checked); await Settings.save(); toast(e.target.checked?"Print photos: large":"Print photos: small"); });
 document.getElementById("f_finishmsg").addEventListener("change", async function(e){ Settings.set("finishMsg", e.target.value); await Settings.save(); });
 function fillTemplate(t,o){
   var bal=balance(o);
