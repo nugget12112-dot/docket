@@ -478,7 +478,8 @@
       <button class="scanbtn" id="serialScan"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7V5h16v2M9 5v14M7 19h4"/></svg>Scan text</button>
     </div>
     <div class="field"><label>Customer name</label><input id="f_customer" placeholder="Hand the iPad over — they can type it" /></div>
-    <div class="field"><label>Phone / contact</label><input id="f_contact" inputmode="tel" placeholder="Mobile or email" /></div>
+    <div class="field"><label>Phone</label><input id="f_phone" inputmode="tel" placeholder="Mobile number" /></div>
+    <div class="field"><label>Email (optional)</label><input id="f_email" inputmode="email" autocapitalize="off" autocorrect="off" placeholder="name@example.com" /></div>
     <div class="field"><label>Item &amp; repair</label><textarea id="f_desc" placeholder="e.g. 9ct gold ring — resize to N, claw re-tip"></textarea></div>
     <div class="field">
       <label>Photos — evidence of the item</label>
@@ -600,7 +601,7 @@
     <div class="set-row tap" id="m_csv"><span class="lbl">Export to spreadsheet (CSV)</span><span class="chev">›</span></div>
 
     <div class="modenote" id="modeNote"></div>
-    <div style="text-align:center;color:var(--faint);font-size:12px;margin:18px 0 4px;">Docket v1.2 · EMESSA</div>
+    <div style="text-align:center;color:var(--faint);font-size:12px;margin:18px 0 4px;">Docket v1.3 · EMESSA</div>
     <input type="file" id="restoreFile" accept="application/json,.json" hidden />
   </div>
 </div>
@@ -762,6 +763,8 @@ function daysUntil(iso){ if(!iso) return null; var p=iso.split("-"); var due=new
 function isOverdue(o){ if(o.status==="collected") return false; var d=daysUntil(o.due); return d!==null && d<0; }
 function isSoon(o){ if(o.status==="collected") return false; var d=daysUntil(o.due); return d!==null && d>=0 && d<=3; }
 function balance(o){ return num(o.cost)-num(o.paid); }
+function orderPhone(o){ var p=(o.phone||"").trim(); if(p) return p; return (o.contact && o.contact.indexOf("@")===-1) ? o.contact.trim() : ""; }
+function orderEmail(o){ var e=(o.email||"").trim(); if(e) return e; return (o.contact && o.contact.indexOf("@")>-1) ? o.contact.trim() : ""; }
 
 /* ---------- Render ---------- */
 var listEl=document.getElementById("list");
@@ -788,7 +791,7 @@ function applyFilterSort(){
       if(!pass) return false;
     }
     if(term){
-      var hay = (o.barcode+" "+(o.serial||"")+" "+o.customer+" "+o.contact+" "+o.description+" "+o.notes).toLowerCase();
+      var hay = (o.barcode+" "+(o.serial||"")+" "+o.customer+" "+(o.contact||"")+" "+(o.phone||"")+" "+(o.email||"")+" "+o.description+" "+o.notes).toLowerCase();
       if(hay.indexOf(term)===-1) return false;
     }
     return true;
@@ -831,7 +834,7 @@ function cardHTML(o){
       '<span class="badge '+o.status+'">'+STATUS_LABEL[o.status]+'</span>'+
     '</div>'+
     (o.description?'<div class="desc">'+esc(o.description)+'</div>':'')+
-    (o.contact?'<div class="contact">'+esc(o.contact)+'</div>':'')+
+    ((orderPhone(o)||orderEmail(o))?'<div class="contact">'+esc([orderPhone(o),orderEmail(o)].filter(Boolean).join(" · "))+'</div>':'')+
     '<div class="meta">'+
       '<span class="id"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 5v14M7 5v14M11 5v14M15 5v14M19 5v14M21 5v14"/></svg>'+esc(o.barcode||"—")+'</span>'+
       (o.serial?'<span class="id">S/N '+esc(o.serial)+'</span>':'')+
@@ -1033,7 +1036,8 @@ function openForm(o){
   document.getElementById("f_barcode").value = o&&o.barcode||"";
   document.getElementById("f_serial").value = o&&o.serial||"";
   document.getElementById("f_customer").value = o&&o.customer||"";
-  document.getElementById("f_contact").value = o&&o.contact||"";
+  document.getElementById("f_phone").value = (o && orderPhone(o)) || "";
+  document.getElementById("f_email").value = (o && orderEmail(o)) || "";
   document.getElementById("f_desc").value = o&&o.description||"";
   document.getElementById("f_cost").value = o&&o.cost!=null?o.cost:"";
   document.getElementById("f_paid").value = o&&o.paid!=null?o.paid:"";
@@ -1116,7 +1120,8 @@ document.getElementById("saveBtn").addEventListener("click", function(){
   var isEdit=!!editingId;
   var data={
     barcode:barcode, serial:document.getElementById("f_serial").value.trim(), customer:customer,
-    contact:document.getElementById("f_contact").value.trim(),
+    phone:document.getElementById("f_phone").value.trim(),
+    email:document.getElementById("f_email").value.trim(),
     description:document.getElementById("f_desc").value.trim(),
     cost:num(document.getElementById("f_cost").value),
     paid:num(document.getElementById("f_paid").value),
@@ -1459,11 +1464,11 @@ document.getElementById("restoreFile").addEventListener("change", function(e){
   e.target.value="";
 });
 document.getElementById("m_csv").addEventListener("click", function(){
-  var head=["Barcode","Serial","Customer","Contact","Item & repair","Cost","Paid","Balance","Received","Due","Status","Photos","Videos","Notes"];
+  var head=["Barcode","Serial","Customer","Phone","Email","Item & repair","Cost","Paid","Balance","Received","Due","Status","Photos","Videos","Notes"];
   function q(v){ v=String(v==null?"":v); return '"'+v.replace(/"/g,'""')+'"'; }
   var rows=[head.map(q).join(",")];
   orders.forEach(function(o){
-    rows.push([o.barcode,o.serial,o.customer,o.contact,o.description,num(o.cost).toFixed(2),num(o.paid).toFixed(2),balance(o).toFixed(2),o.received,o.due,STATUS_LABEL[o.status]||o.status,((o.photos&&o.photos.length)||0),((o.videos&&o.videos.length)||0),o.notes].map(q).join(","));
+    rows.push([o.barcode,o.serial,o.customer,orderPhone(o),orderEmail(o),o.description,num(o.cost).toFixed(2),num(o.paid).toFixed(2),balance(o).toFixed(2),o.received,o.due,STATUS_LABEL[o.status]||o.status,((o.photos&&o.photos.length)||0),((o.videos&&o.videos.length)||0),o.notes].map(q).join(","));
   });
   var ok=download("docket-orders-"+todayISO()+".csv", rows.join("\r\n"), "text/csv");
   toast(ok?"CSV exported":"Couldn’t create the file here"); closeAll();
@@ -1530,11 +1535,9 @@ function openPreview(o){
   html+='<div class="pv-top"><span class="badge '+o.status+'">'+(STATUS_LABEL[o.status]||o.status)+'</span>'+(over?'<span class="pv-over">● Overdue</span>':'')+'</div>';
   html+='<div class="pv-sec">';
   if((o.description||"").trim()) html+=previewRow("Item & repair", esc(o.description));
-  if((o.contact||"").trim()){
-    var c=o.contact.trim();
-    var href=c.indexOf("@")>-1 ? ("mailto:"+encodeURIComponent(c)) : ("tel:"+c.replace(/[^0-9+]/g,""));
-    html+=previewRow("Contact", '<a href="'+href+'">'+esc(c)+'</a>');
-  }
+  var cph=orderPhone(o), cem=orderEmail(o);
+  if(cph) html+=previewRow("Phone", '<a href="tel:'+cph.replace(/[^0-9+]/g,"")+'">'+esc(cph)+'</a>');
+  if(cem) html+=previewRow("Email", '<a href="mailto:'+encodeURIComponent(cem)+'">'+esc(cem)+'</a>');
   html+=previewRow("Docket no.", esc(o.barcode||"—"));
   if((o.serial||"").trim()) html+=previewRow("Serial", esc(o.serial));
   html+=previewRow("Received", esc(fmtDate(o.received)));
@@ -1576,7 +1579,8 @@ async function doPrint(d){
   var bal=num(d.cost)-num(d.paid);
   var rows="";
   if((d.customer||"").trim()) rows+=printRow("Customer", d.customer);
-  if((d.contact||"").trim()) rows+=printRow("Contact", d.contact);
+  if(orderPhone(d)) rows+=printRow("Phone", orderPhone(d));
+  if(orderEmail(d)) rows+=printRow("Email", orderEmail(d));
   if((d.description||"").trim()) rows+=printRow("Item & repair", d.description);
   if((d.serial||"").trim()) rows+=printRow("Serial number", d.serial);
   rows+=printRow("Received", fmtDate(d.received));
@@ -1632,7 +1636,8 @@ function printFromForm(){
     barcode:document.getElementById("f_barcode").value.trim(),
     serial:document.getElementById("f_serial").value.trim(),
     customer:document.getElementById("f_customer").value.trim(),
-    contact:document.getElementById("f_contact").value.trim(),
+    phone:document.getElementById("f_phone").value.trim(),
+    email:document.getElementById("f_email").value.trim(),
     description:document.getElementById("f_desc").value.trim(),
     cost:num(document.getElementById("f_cost").value),
     paid:num(document.getElementById("f_paid").value),
@@ -1777,8 +1782,9 @@ function openMessage(contact, msg){
 function maybeMessageCustomer(o){
   var s=Settings.get();
   if(!s.finishMsgOn || !(s.finishMsg||"").trim()) return;
-  if(!(o.contact||"").trim()){ toast("No phone/email on file to message "+(o.customer||"the customer")); return; }
-  openMessage(o.contact, fillTemplate(s.finishMsg, o));
+  var ph=orderPhone(o), em=orderEmail(o);
+  if(!ph && !em){ toast("No phone or email on file to message "+(o.customer||"the customer")); return; }
+  openMessage(ph || em, fillTemplate(s.finishMsg, o));
 }
 
 /* ---------- Toast ---------- */
