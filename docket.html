@@ -325,6 +325,10 @@
   .photo-thumb .rm{position:absolute;top:3px;right:3px;width:23px;height:23px;border-radius:50%;border:0;background:rgba(0,0,0,.62);color:#fff;font-size:15px;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center;}
   .addphoto{height:48px;border:1.5px dashed var(--accent-line);background:var(--accent-tint);color:var(--accent);border-radius:13px;font-family:inherit;font-weight:700;font-size:14px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;width:100%;}
   .addphoto:active{filter:brightness(.97);}
+  .lib-btn{display:none;}
+  body.is-android .lib-btn{display:flex;}
+  .addphoto-lib{height:38px;margin-top:6px;border:none;background:transparent;color:var(--accent);font-family:inherit;font-weight:600;font-size:13px;cursor:pointer;align-items:center;justify-content:center;gap:7px;width:100%;}
+  .addphoto-lib:active{opacity:.6;}
   .video-thumb{position:relative;width:84px;height:84px;border-radius:12px;overflow:hidden;border:1px solid var(--line);background:#101012;cursor:pointer;flex:none;display:flex;align-items:center;justify-content:center;}
   .video-thumb img{width:100%;height:100%;object-fit:cover;display:block;}
   .video-thumb .play{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:30px;height:30px;border-radius:50%;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center;pointer-events:none;}
@@ -480,7 +484,7 @@
       <button class="scanbtn" id="formScan" title="Scan barcode"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M3 8V5a2 2 0 0 1 2-2h3M16 3h3a2 2 0 0 1 2 2v3M21 16v3a2 2 0 0 1-2 2h-3M8 21H5a2 2 0 0 1-2-2v-3M3 12h18"/></svg>Scan</button>
       <button class="scanbtn" id="serialScan" title="Read an engraved number"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7V5h16v2M9 5v14M7 19h4"/></svg>Read</button>
     </div>
-    <div class="field"><label>Customer name</label><input id="f_customer" placeholder="Hand the iPad over — they can type it" /></div>
+    <div class="field"><label>Customer name</label><input id="f_customer" placeholder="Full name" /></div>
     <div class="field"><label>Phone</label><input id="f_phone" inputmode="tel" placeholder="Mobile number" /></div>
     <div class="field"><label>Email (optional)</label><input id="f_email" inputmode="email" autocapitalize="off" autocorrect="off" placeholder="name@example.com" /></div>
     <div class="field"><label>Item &amp; repair</label><textarea id="f_desc" placeholder="e.g. 9ct gold ring — resize to N, claw re-tip"></textarea></div>
@@ -488,12 +492,14 @@
       <label>Photos — evidence of the item</label>
       <div class="photos" id="photoStrip"></div>
       <button type="button" class="addphoto" id="addPhotoBtn"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8a2 2 0 0 1 2-2h2l1.2-2h7.6L19 6h2a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2z" transform="translate(0 1)"/><circle cx="12" cy="13" r="3.4"/></svg>Add photo</button>
+      <button type="button" class="addphoto-lib lib-btn" id="addPhotoLibBtn"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="14" rx="2"/><path d="M3 14l4.5-4.5L12 14"/><circle cx="15" cy="9" r="1.6"/></svg>Choose from library</button>
       <input type="file" id="photoInput" accept="image/*" multiple hidden />
     </div>
     <div class="field">
       <label>Videos — short clips of the piece</label>
       <div class="photos" id="videoStrip"></div>
       <button type="button" class="addphoto" id="addVideoBtn"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="6" width="13" height="12" rx="2"/><path d="M22 8.5l-5 3.5 5 3.5z"/></svg>Add video</button>
+      <button type="button" class="addphoto-lib lib-btn" id="addVideoLibBtn"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="14" rx="2"/><path d="M3 14l4.5-4.5L12 14"/><circle cx="15" cy="9" r="1.6"/></svg>Choose from library</button>
       <input type="file" id="videoInput" accept="video/*" multiple hidden />
     </div>
     <div class="two">
@@ -610,7 +616,7 @@
     <div class="set-row tap" id="m_csv"><span class="lbl">Export to spreadsheet (CSV)</span><span class="chev">›</span></div>
 
     <div class="modenote" id="modeNote"></div>
-    <div style="text-align:center;color:var(--faint);font-size:12px;margin:18px 0 4px;">Docket v2.2 · EMESSA</div>
+    <div style="text-align:center;color:var(--faint);font-size:12px;margin:18px 0 4px;">Docket v2.4 · EMESSA</div>
     <input type="file" id="restoreFile" accept="application/json,.json" hidden />
   </div>
 </div>
@@ -1075,7 +1081,9 @@ document.getElementById("f_cost").addEventListener("input",updateBalNote);
 document.getElementById("f_paid").addEventListener("input",updateBalNote);
 
 /* photo add */
-document.getElementById("addPhotoBtn").addEventListener("click", function(){ document.getElementById("photoInput").click(); });
+if(/Android/i.test(navigator.userAgent||"")) document.body.classList.add("is-android");
+document.getElementById("addPhotoBtn").addEventListener("click", function(){ var inp=document.getElementById("photoInput"); if(/Android/i.test(navigator.userAgent||"")){ inp.setAttribute("capture","environment"); inp.removeAttribute("multiple"); } inp.click(); });
+document.getElementById("addPhotoLibBtn").addEventListener("click", function(){ var inp=document.getElementById("photoInput"); inp.removeAttribute("capture"); inp.setAttribute("multiple",""); inp.click(); });
 document.getElementById("photoInput").addEventListener("change", async function(e){
   var files=Array.prototype.slice.call(e.target.files||[]);
   e.target.value="";
@@ -1093,7 +1101,8 @@ document.getElementById("photoInput").addEventListener("change", async function(
   toast("Photo added");
 });
 
-document.getElementById("addVideoBtn").addEventListener("click", function(){ document.getElementById("videoInput").click(); });
+document.getElementById("addVideoBtn").addEventListener("click", function(){ var inp=document.getElementById("videoInput"); if(/Android/i.test(navigator.userAgent||"")){ inp.setAttribute("capture","environment"); inp.removeAttribute("multiple"); } inp.click(); });
+document.getElementById("addVideoLibBtn").addEventListener("click", function(){ var inp=document.getElementById("videoInput"); inp.removeAttribute("capture"); inp.setAttribute("multiple",""); inp.click(); });
 document.getElementById("videoInput").addEventListener("change", async function(e){
   var files=Array.prototype.slice.call(e.target.files||[]);
   e.target.value="";
