@@ -329,6 +329,9 @@
   body.is-android .lib-btn{display:flex;}
   .addphoto-lib{height:38px;margin-top:6px;border:none;background:transparent;color:var(--accent);font-family:inherit;font-weight:600;font-size:13px;cursor:pointer;align-items:center;justify-content:center;gap:7px;width:100%;}
   .addphoto-lib:active{opacity:.6;}
+  .field input.locked{background:var(--accent-tint);color:var(--accent);font-weight:800;letter-spacing:.06em;}
+  .manual-num{margin-top:7px;border:none;background:transparent;color:var(--accent);font-family:inherit;font-weight:600;font-size:13px;cursor:pointer;padding:0;}
+  .manual-num:active{opacity:.6;}
   .video-thumb{position:relative;width:84px;height:84px;border-radius:12px;overflow:hidden;border:1px solid var(--line);background:#101012;cursor:pointer;flex:none;display:flex;align-items:center;justify-content:center;}
   .video-thumb img{width:100%;height:100%;object-fit:cover;display:block;}
   .video-thumb .play{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:30px;height:30px;border-radius:50%;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center;pointer-events:none;}
@@ -480,6 +483,7 @@
       <div class="field" style="margin-bottom:14px;">
         <label>Docket no. <span style="color:var(--danger);">*</span></label>
         <input id="f_barcode" inputmode="text" placeholder="Scan or type" />
+        <button type="button" id="manualNumBtn" class="manual-num" style="display:none;">Enter number manually</button>
       </div>
       <button class="scanbtn" id="formScan" title="Scan barcode"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M3 8V5a2 2 0 0 1 2-2h3M16 3h3a2 2 0 0 1 2 2v3M21 16v3a2 2 0 0 1-2 2h-3M8 21H5a2 2 0 0 1-2-2v-3M3 12h18"/></svg>Scan</button>
       <button class="scanbtn" id="serialScan" title="Read an engraved number"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7V5h16v2M9 5v14M7 19h4"/></svg>Read</button>
@@ -596,10 +600,24 @@
       <label class="switch"><input type="checkbox" id="sw_dark"><span class="track"><span class="knob"></span></span></label>
     </div>
 
+    <div class="set-section">Docket numbering</div>
+    <div class="set-row">
+      <span class="lbl">Auto-generate docket numbers<small>New dockets get the next number automatically; turn off to type each one</small></span>
+      <label class="switch"><input type="checkbox" id="sw_autonum"><span class="track"><span class="knob"></span></span></label>
+    </div>
+    <div class="set-row" id="row_nextnum">
+      <span class="lbl">Next number<small>The number the next auto docket will use</small></span>
+      <input type="number" id="num_next" class="timeinput" min="1" inputmode="numeric" style="width:96px;text-align:right;" />
+    </div>
+
     <div class="set-section">Printing</div>
     <div class="set-row">
       <span class="lbl">Larger photos on printed docket<small>Turn off for smaller thumbnails that help the docket fit on a single page</small></span>
       <label class="switch"><input type="checkbox" id="sw_bigphotos"><span class="track"><span class="knob"></span></span></label>
+    </div>
+    <div class="set-row">
+      <span class="lbl">Print size<small>Paper size for the printed docket (the full docket is scaled to fit)</small></span>
+      <select id="sel_printsize" class="timeinput"><option value="A4">A4</option><option value="A5">A5</option><option value="A6">A6</option><option value="A7">A7</option></select>
     </div>
 
     <div class="set-section">Privacy</div>
@@ -616,7 +634,7 @@
     <div class="set-row tap" id="m_csv"><span class="lbl">Export to spreadsheet (CSV)</span><span class="chev">›</span></div>
 
     <div class="modenote" id="modeNote"></div>
-    <div style="text-align:center;color:var(--faint);font-size:12px;margin:18px 0 4px;">Docket v2.4 · EMESSA</div>
+    <div style="text-align:center;color:var(--faint);font-size:12px;margin:18px 0 4px;">Docket v2.5 · EMESSA</div>
     <input type="file" id="restoreFile" accept="application/json,.json" hidden />
   </div>
 </div>
@@ -738,7 +756,7 @@ function processImage(file, maxDim, quality){
 var Settings = (function(){
   var KEY="docket_settings_v1";
   var hasClaude=(typeof window!=="undefined" && window.storage && typeof window.storage.get==="function");
-  var defaults={autoRemind:true, remindTime:"09:00", notifyOnOpen:false, theme:null, lockOn:false, pinHash:null, pinSalt:null, finishMsgOn:true, printLargePhotos:true, finishMsg:"Hi {name}, your repair ({item}) is ready to collect. Balance due: {balance}. Thank you!"};
+  var defaults={autoRemind:true, remindTime:"09:00", notifyOnOpen:false, theme:null, lockOn:false, pinHash:null, pinSalt:null, finishMsgOn:true, printLargePhotos:true, autoNumber:true, nextNumber:1, printSize:"A4", finishMsg:"Hi {name}, your repair ({item}) is ready to collect. Balance due: {balance}. Thank you!"};
   var cache=Object.assign({},defaults);
   async function load(){
     try{
@@ -943,6 +961,7 @@ document.getElementById("search").addEventListener("input", function(e){ term=e.
 
 /* ---------- Order form ---------- */
 var editingId=null;
+var formManualOverride=false;
 var formPhotos=[];
 var formVideos=[];
 var formPhotoUrls={};
@@ -1045,10 +1064,28 @@ if(sigPad){
 }
 function signatureData(){ return (sigPad && sigHasInk) ? sigPad.toDataURL("image/png") : ""; }
 
+function pad4(n){ n=String(n); while(n.length<4) n="0"+n; return n; }
+function nextDocketNumber(){ var n=parseInt(Settings.get().nextNumber,10); if(!n||n<1) n=1; return pad4(n); }
+function applyNumberMode(isNew){
+  var f=document.getElementById("f_barcode");
+  var scan=document.getElementById("formScan"), read=document.getElementById("serialScan"), mb=document.getElementById("manualNumBtn");
+  var auto=Settings.get().autoNumber!==false;
+  if(isNew && auto && !formManualOverride){
+    f.value=nextDocketNumber(); f.readOnly=true; f.classList.add("locked");
+    if(scan) scan.style.display="none"; if(read) read.style.display="none";
+    if(mb) mb.style.display="";
+  }else{
+    f.readOnly=false; f.classList.remove("locked");
+    if(scan) scan.style.display=""; if(read) read.style.display="";
+    if(mb) mb.style.display="none";
+  }
+}
 function openForm(o){
   editingId = o && o.uid ? o.uid : null;
   document.getElementById("formTitle").textContent = editingId ? "Edit order" : "New order";
+  formManualOverride=false;
   document.getElementById("f_barcode").value = (o && (o.barcode || o.serial)) || "";
+  applyNumberMode(!editingId);
   document.getElementById("f_customer").value = o&&o.customer||"";
   document.getElementById("f_phone").value = (o && orderPhone(o)) || "";
   document.getElementById("f_email").value = (o && orderEmail(o)) || "";
@@ -1158,6 +1195,10 @@ document.getElementById("saveBtn").addEventListener("click", function(){
   }else{
     data.uid=uid(); data.created=Date.now();
     orders.unshift(data); saved=data;
+    if(Settings.get().autoNumber!==false && !formManualOverride){
+      var nn=parseInt(Settings.get().nextNumber,10); if(!nn||nn<1) nn=1;
+      Settings.set("nextNumber", nn+1); Settings.save();
+    }
   }
   if(filter==="archive" && saved.status!=="collected"){ filter="all"; }
   render();
@@ -1168,6 +1209,7 @@ document.getElementById("saveBtn").addEventListener("click", function(){
 });
 
 /* open/close overlays */
+document.getElementById("manualNumBtn").addEventListener("click", function(){ if(!confirm("Enter the docket number manually instead of auto-generating it?")) return; formManualOverride=true; var f=document.getElementById("f_barcode"); f.readOnly=false; f.classList.remove("locked"); f.value=""; var sc=document.getElementById("formScan"), rd=document.getElementById("serialScan"); if(sc) sc.style.display=""; if(rd) rd.style.display=""; this.style.display="none"; f.focus(); });
 document.getElementById("addBtn").addEventListener("click", function(){ openForm(null); });
 function closeAll(){ document.querySelectorAll(".overlay").forEach(function(o){o.classList.remove("show");}); stopScanner(); stopViewer(); revokeFormUrls(); revokePreviewUrls(); }
 function closeScanner(){ document.getElementById("scanOverlay").classList.remove("show"); stopScanner(); }
@@ -1592,6 +1634,19 @@ var SHOP_TERMS="PLEASE NOTE: We reserve the right to require proof of I.D. shoul
 var SHOP_KEEPSAFE="Please keep this docket safe — it is your proof of ownership. If it is lost or misplaced we may be unable to confirm this order is yours, so please contact EMESSA as soon as possible.";
 function printRow(label,val){ return '<tr><th>'+esc(label)+'</th><td>'+esc(val)+'</td></tr>'; }
 function blobToDataURL(blob){ return new Promise(function(res){ try{ var r=new FileReader(); r.onload=function(){res(r.result);}; r.onerror=function(){res(null);}; r.readAsDataURL(blob); }catch(e){ res(null); } }); }
+var PRINT_SIZES={
+  A4:{size:"A4",margin:11,w:186,h:252,split:true},
+  A5:{size:"A5",margin:9,w:128,h:190,split:false},
+  A6:{size:"A6",margin:6,w:91,h:134,split:false},
+  A7:{size:"A7",margin:5,w:62,h:93,split:false}
+};
+function applyPrintSize(){
+  var s=(Settings.get().printSize)||"A4"; var p=PRINT_SIZES[s]||PRINT_SIZES.A4;
+  var el=document.getElementById("printSizeStyle");
+  if(!el){ el=document.createElement("style"); el.id="printSizeStyle"; document.head.appendChild(el); }
+  el.textContent="@media print{@page{size:"+p.size+";margin:"+p.margin+"mm;}#printArea .p-shot{max-width:"+p.w+"mm;max-height:"+p.h+"mm;}}";
+  return p;
+}
 async function measureDoc(bodyHtml){
   var stage=document.createElement("div");
   stage.style.cssText="position:fixed;left:-10000px;top:0;width:760px;background:#fff;z-index:-1;";
@@ -1657,22 +1712,28 @@ async function doPrint(d){
   var page1Lite = letterHtml + footP1;                          /* split B: text only on page 1 */
   var page2Photos = p2headHtml + photosHtml + sigHtml + keepHtml + footP2;
   var area=document.getElementById("printArea");
+  var psize=applyPrintSize();
   var rendered=false;
   toast("Preparing print…");
   try{ await ensureHtml2Canvas(); }catch(e){}
   if(window.html2canvas){
     try{
-      var hAll=await measureDoc(onePageBody);
-      if(hAll<=1080){
-        var img=await rasterizeDoc(onePageBody);
-        area.innerHTML='<div class="p-sheet"><img class="p-shot" src="'+img+'"></div>';
+      if(psize.split){
+        var hAll=await measureDoc(onePageBody);
+        if(hAll<=1080){
+          var imgA=await rasterizeDoc(onePageBody);
+          area.innerHTML='<div class="p-sheet"><img class="p-shot" src="'+imgA+'"></div>';
+        }else{
+          var photosToP2 = !!imgsHtml && (await measureDoc(page1Body))>1080;
+          var img1=await rasterizeDoc(photosToP2?page1Lite:page1Body);
+          var img2=await rasterizeDoc(photosToP2?page2Photos:page2Body);
+          area.innerHTML=
+            '<div class="p-sheet"><img class="p-shot" src="'+img1+'"></div>'+
+            '<div class="p-sheet p-sheet2"><img class="p-shot" src="'+img2+'"></div>';
+        }
       }else{
-        var photosToP2 = !!imgsHtml && (await measureDoc(page1Body))>1080;
-        var img1=await rasterizeDoc(photosToP2?page1Lite:page1Body);
-        var img2=await rasterizeDoc(photosToP2?page2Photos:page2Body);
-        area.innerHTML=
-          '<div class="p-sheet"><img class="p-shot" src="'+img1+'"></div>'+
-          '<div class="p-sheet p-sheet2"><img class="p-shot" src="'+img2+'"></div>';
+        var imgS=await rasterizeDoc(onePageBody);
+        area.innerHTML='<div class="p-sheet"><img class="p-shot" src="'+imgS+'"></div>';
       }
       rendered=true;
     }catch(e){ rendered=false; }
@@ -1777,6 +1838,10 @@ function refreshSettingsUI(){
   var cp=document.getElementById("m_changepin"); if(cp) cp.style.display=s.lockOn?"flex":"none";
   var fm=document.getElementById("sw_finishmsg"); if(fm) fm.checked=!!s.finishMsgOn;
   var bp=document.getElementById("sw_bigphotos"); if(bp) bp.checked=(s.printLargePhotos!==false);
+  var an=document.getElementById("sw_autonum"); if(an) an.checked=(s.autoNumber!==false);
+  var nx=document.getElementById("num_next"); if(nx) nx.value=(s.nextNumber&&s.nextNumber>0)?s.nextNumber:1;
+  var ps=document.getElementById("sel_printsize"); if(ps) ps.value=s.printSize||"A4";
+  var rn=document.getElementById("row_nextnum"); if(rn) rn.style.display=(s.autoNumber!==false)?"":"none";
   var ft=document.getElementById("f_finishmsg"); if(ft) ft.value=s.finishMsg||"";
 }
 document.getElementById("sw_auto").addEventListener("change", async function(e){ Settings.set("autoRemind", e.target.checked); await Settings.save(); toast(e.target.checked?"Auto reminders on":"Auto reminders off"); });
@@ -1809,6 +1874,9 @@ document.getElementById("m_remindall").addEventListener("click", function(){ rem
 
 document.getElementById("sw_finishmsg").addEventListener("change", async function(e){ Settings.set("finishMsgOn", e.target.checked); await Settings.save(); toast(e.target.checked?"Customer message on":"Customer message off"); });
 document.getElementById("sw_bigphotos").addEventListener("change", async function(e){ Settings.set("printLargePhotos", e.target.checked); await Settings.save(); toast(e.target.checked?"Print photos: large":"Print photos: small"); });
+document.getElementById("sw_autonum").addEventListener("change", async function(e){ Settings.set("autoNumber", e.target.checked); await Settings.save(); var rn=document.getElementById("row_nextnum"); if(rn) rn.style.display=e.target.checked?"":"none"; toast(e.target.checked?"Auto-numbering on":"Auto-numbering off"); });
+document.getElementById("num_next").addEventListener("change", async function(e){ var v=parseInt(e.target.value,10); if(!v||v<1) v=1; Settings.set("nextNumber", v); e.target.value=v; await Settings.save(); toast("Next number set to "+pad4(v)); });
+document.getElementById("sel_printsize").addEventListener("change", async function(e){ Settings.set("printSize", e.target.value); await Settings.save(); toast("Print size: "+e.target.value); });
 document.getElementById("f_finishmsg").addEventListener("change", async function(e){ Settings.set("finishMsg", e.target.value); await Settings.save(); });
 function fillTemplate(t,o){
   var bal=balance(o);
